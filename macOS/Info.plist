@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleExecutable</key><string>$(EXECUTABLE_NAME)</string>
+    <key>CFBundleIdentifier</key><string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <key>CFBundleName</key><string>$(PRODUCT_NAME)</string>
+    <key>CFBundleDisplayName</key><string>EvoPad Mac</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleVersion</key><string>$(CURRENT_PROJECT_VERSION)</string>
+    <key>CFBundleShortVersionString</key><string>$(MARKETING_VERSION)</string>
+    <key>LSMinimumSystemVersion</key><string>14.0</string>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>EvoPad Mac menerima koneksi dari iPad Anda melalui jaringan Wi-Fi lokal.</string>
+    <key>NSBonjourServices</key><array><string>_evopad._tcp</string></array>
+</dict>
+</plist>
