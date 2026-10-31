@@ -83,6 +83,34 @@ final class PadConnectionManager: ObservableObject {
         }
     }
 
+    /// Sends a Protocol V2 envelope over the same serial `networkQueue`.
+    func sendV2(_ envelope: PadEnvelopeV2) {
+        networkQueue.async { [weak self] in
+            guard let self, let connection = self.connection else { return }
+            guard var data = try? JSONEncoder().encode(envelope),
+                  data.count <= PadProtocol.maximumFrameBytes else {
+                PadLog.network("iPad: V2 frame rejected locally (encode failure or >16KB)")
+                return
+            }
+            data.append(0x0A)
+
+            self.outstandingSends += 1
+            connection.send(
+                content: data,
+                contentContext: .defaultMessage,
+                isComplete: false,
+                completion: .contentProcessed { [weak self] error in
+                    self?.networkQueue.async {
+                        self?.outstandingSends -= 1
+                    }
+                    if let error {
+                        PadLog.network("iPad: V2 send failed (\(envelope.type.rawValue)): \(error.localizedDescription)")
+                    }
+                }
+            )
+        }
+    }
+
     private func connect(to endpoint: NWEndpoint) {
         lastEndpoint = endpoint
         connection?.cancel()
@@ -160,22 +188,42 @@ final class PadConnectionManager: ObservableObject {
                 buffer.append(data)
             }
 
-            while let newline = buffer.firstIndex(of: 0x0A) {
-                let line = Data(buffer[..<newline])
-                buffer.removeSubrange(buffer.startIndex...newline)
+            loop: while true {
+                switch PadFrameCodec.popNextFrame(from: &buffer) {
+                case .needMoreData:
+                    break loop
 
-                guard !line.isEmpty,
-                      let acknowledgement = try? JSONDecoder().decode(
-                        PadAcknowledgement.self,
-                        from: line
-                      ),
-                      acknowledgement.kind == "gestureAck" else {
-                    continue
-                }
+                case .frameTooLarge(let size):
+                    PadLog.network("iPad: rejected server frame >16KB (size=\(size))")
+                    activeConnection.cancel()
+                    return
 
-                PadLog.network("iPad: received gestureAck direction=\(acknowledgement.direction.rawValue) accepted=\(acknowledgement.accepted)")
-                DispatchQueue.main.async { [weak self] in
-                    self?.macFeedback = acknowledgement.message
+                case .line(let line):
+                    if line.isEmpty { continue }
+                    switch PadFrameCodec.decodeServerFrame(line) {
+                    case .success(.v1Ack(let acknowledgement)):
+                        guard acknowledgement.kind == "gestureAck" else { continue }
+                        PadLog.network("iPad: received gestureAck direction=\(acknowledgement.direction.rawValue) accepted=\(acknowledgement.accepted)")
+                        DispatchQueue.main.async { [weak self] in
+                            self?.macFeedback = acknowledgement.message
+                        }
+
+                    case .success(.v2Envelope(let envelope)):
+                        PadLog.network("iPad: received V2 response type=\(envelope.type.rawValue) requestId=\(envelope.requestId)")
+                        if let ack = envelope.acknowledgement, let msg = ack.message {
+                            DispatchQueue.main.async { [weak self] in
+                                self?.macFeedback = msg
+                            }
+                        } else if let err = envelope.error {
+                            PadLog.network("iPad: V2 error code=\(err.code.rawValue) message=\(err.message)")
+                            DispatchQueue.main.async { [weak self] in
+                                self?.macFeedback = "Error [\(err.code.rawValue)]: \(err.message)"
+                            }
+                        }
+
+                    case .failure(let decodeError):
+                        PadLog.network("iPad: failed to decode server frame: \(decodeError)")
+                    }
                 }
             }
 
