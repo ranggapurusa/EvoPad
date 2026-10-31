@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import Security
 
 enum PadProtocol {
     static let serviceType = "_evopad._tcp"
@@ -10,11 +11,48 @@ enum PadProtocol {
     static let maximumTextInputBytes = 512
     static let maximumMacroSteps = 24
 
-    /// Disable Nagle buffering so small pointer packets are sent immediately.
-    static func lowLatencyTCPParameters() -> NWParameters {
+    /// TLS 1.3 parameters for Mac Server using SecIdentity. Plaintext is strictly forbidden.
+    static func tlsServerParameters(secIdentity: SecIdentity) -> NWParameters {
         let tcp = NWProtocolTCP.Options()
         tcp.noDelay = true
-        return NWParameters(tls: nil, tcp: tcp)
+
+        let tls = NWProtocolTLS.Options()
+        sec_protocol_options_set_min_tls_protocol_version(tls.securityProtocolOptions, .TLSv13)
+        sec_protocol_options_set_max_tls_protocol_version(tls.securityProtocolOptions, .TLSv13)
+
+        if let identity = sec_identity_create(secIdentity) {
+            sec_protocol_options_set_local_identity(tls.securityProtocolOptions, identity)
+        }
+
+        return NWParameters(tls: tls, tcp: tcp)
+    }
+
+    /// TLS 1.3 parameters for iPad Client with pinned certificate fingerprint verification.
+    /// Plaintext is strictly forbidden.
+    static func tlsClientParameters(
+        pinnedFingerprintHex: String,
+        verifyQueue: DispatchQueue
+    ) -> NWParameters {
+        let tcp = NWProtocolTCP.Options()
+        tcp.noDelay = true
+
+        let tls = NWProtocolTLS.Options()
+        sec_protocol_options_set_min_tls_protocol_version(tls.securityProtocolOptions, .TLSv13)
+        sec_protocol_options_set_max_tls_protocol_version(tls.securityProtocolOptions, .TLSv13)
+
+        sec_protocol_options_set_verify_block(
+            tls.securityProtocolOptions,
+            { (_, secTrust, complete) in
+                let isValid = PadCertificateVerifier.verifyServerCertificate(
+                    trust: sec_trust_copy_ref(secTrust).takeRetainedValue(),
+                    pinnedFingerprintHex: pinnedFingerprintHex
+                )
+                complete(isValid)
+            },
+            verifyQueue
+        )
+
+        return NWParameters(tls: tls, tcp: tcp)
     }
 }
 
@@ -135,10 +173,7 @@ struct PadCommand: Codable {
     }
 }
 
-
 /// A lightweight acknowledgement sent from Mac Helper back to the iPad.
-/// `accepted` means the Mac created and posted the Quartz keyboard events;
-/// macOS does not expose a callback confirming that a system UI actually opened.
 struct PadAcknowledgement: Codable {
     let kind: String
     let direction: PadGestureDirection
@@ -159,14 +194,17 @@ struct PadAcknowledgement: Codable {
     }
 }
 
-// MARK: - Protocol V2 Foundation (M1)
+// MARK: - Protocol V2 Foundation (M1 + M2 Security)
 
 enum PadMessageTypeV2: String, Codable {
-    // Handshake & Auth (reserved for M2)
+    // Handshake & Authentication & Pairing (M2)
     case hello
     case challenge
     case auth
     case authResult
+    case pairingCommit
+    case pairingComplete
+
     // Input & Productivity Commands
     case pointerEvent
     case gestureEvent
@@ -176,6 +214,7 @@ enum PadMessageTypeV2: String, Codable {
     case mediaControl
     case systemControl
     case macroExecute
+
     // Responses
     case actionAck
     case error
@@ -192,6 +231,9 @@ enum PadErrorCodeV2: String, Codable {
     case unsupportedAction = "UNSUPPORTED_ACTION"
     case macroCancelled = "MACRO_CANCELLED"
     case macroLimitExceeded = "MACRO_LIMIT_EXCEEDED"
+    case pairingExpired = "PAIRING_EXPIRED"
+    case pairingRejected = "PAIRING_REJECTED"
+    case certMismatch = "CERT_MISMATCH"
 }
 
 enum PadKeyPhaseV2: String, Codable {
@@ -241,11 +283,18 @@ struct PadPayloadV2: Codable, Equatable {
     var macroId: String?
     var steps: [PadMacroStepV2]?
 
-    // Auth / Handshake (prepared for M2)
+    // Auth & Pairing (M2)
     var clientDeviceId: String?
     var serverDeviceId: String?
+    var deviceName: String?
+    var pairingId: String?
     var nonce: String?
     var hmac: String?
+    var authMode: String? // "pairing" or "reconnect"
+    var pairingToken: String?
+    var certFingerprint: String?
+    var status: String?
+    var message: String?
 }
 
 struct PadAcknowledgementV2: Codable, Equatable {
@@ -369,8 +418,30 @@ struct PadEnvelopeV2: Codable, Equatable {
             guard error != nil else {
                 return PadErrorPayloadV2(code: .invalidPayload, message: "error payload wajib diisi untuk pesan error", minVersion: nil, maxVersion: nil)
             }
-        case .hello, .challenge, .auth, .authResult:
-            break
+        case .hello:
+            guard payload?.clientDeviceId != nil, payload?.nonce != nil, payload?.authMode != nil else {
+                return PadErrorPayloadV2(code: .invalidPayload, message: "clientDeviceId, nonce, dan authMode wajib diisi untuk hello", minVersion: nil, maxVersion: nil)
+            }
+        case .challenge:
+            guard payload?.serverDeviceId != nil, payload?.nonce != nil else {
+                return PadErrorPayloadV2(code: .invalidPayload, message: "serverDeviceId dan nonce wajib diisi untuk challenge", minVersion: nil, maxVersion: nil)
+            }
+        case .auth:
+            guard payload?.hmac != nil else {
+                return PadErrorPayloadV2(code: .invalidPayload, message: "hmac wajib diisi untuk auth", minVersion: nil, maxVersion: nil)
+            }
+        case .authResult:
+            guard payload?.status != nil else {
+                return PadErrorPayloadV2(code: .invalidPayload, message: "status wajib diisi untuk authResult", minVersion: nil, maxVersion: nil)
+            }
+        case .pairingCommit:
+            guard payload?.hmac != nil, payload?.pairingId != nil else {
+                return PadErrorPayloadV2(code: .invalidPayload, message: "hmac dan pairingId wajib diisi untuk pairingCommit", minVersion: nil, maxVersion: nil)
+            }
+        case .pairingComplete:
+            guard payload?.status != nil else {
+                return PadErrorPayloadV2(code: .invalidPayload, message: "status wajib diisi untuk pairingComplete", minVersion: nil, maxVersion: nil)
+            }
         }
         return nil
     }
@@ -396,8 +467,6 @@ enum PadProtocolDecodeError: Error, Equatable {
     case invalidPayload(requestId: String, error: PadErrorPayloadV2)
 }
 
-/// Lightweight version sniffer so we can detect `protocolVersion` (or legacy `"v"`)
-/// before deciding between V1 fast-path and V2 envelope decoding.
 private struct PadVersionProbe: Decodable {
     let protocolVersion: Int?
     let v: Int?
@@ -415,8 +484,6 @@ enum PadFrameCodec {
         case frameTooLarge(Int)
     }
 
-    /// Extracts the next newline-delimited frame while enforcing the 16 KB cap.
-    ///// ponytail: single-buffer scan; upgrade to ring buffer only if throughput exceeds 10k msg/s.
     static func popNextFrame(from buffer: inout Data, maxBytes: Int = PadProtocol.maximumFrameBytes) -> LineExtractionResult {
         if let newline = buffer.firstIndex(of: 0x0A) {
             let length = buffer.distance(from: buffer.startIndex, to: newline)
@@ -435,7 +502,6 @@ enum PadFrameCodec {
         return .needMoreData
     }
 
-    /// Decodes a single frame on the Mac side (accepts V1 `PadCommand` or V2 `PadEnvelopeV2`).
     static func decodeClientFrame(_ line: Data) -> Result<PadDecodedIncomingMessage, PadProtocolDecodeError> {
         guard !line.isEmpty else { return .failure(.emptyFrame) }
         guard line.count <= PadProtocol.maximumFrameBytes else {
@@ -444,7 +510,6 @@ enum PadFrameCodec {
 
         let decoder = JSONDecoder()
 
-        // Fast-path check: V1 frames never contain "protocolVersion"; only run V2 path when present.
         if let probe = try? decoder.decode(PadVersionProbe.self, from: line),
            let version = probe.resolvedVersion {
             guard version == PadProtocol.currentVersion else {
@@ -466,7 +531,6 @@ enum PadFrameCodec {
         return .failure(.malformedJSON)
     }
 
-    /// Decodes a single frame on the iPad side (accepts V1 `PadAcknowledgement` or V2 `PadEnvelopeV2`).
     static func decodeServerFrame(_ line: Data) -> Result<PadDecodedServerResponse, PadProtocolDecodeError> {
         guard !line.isEmpty else { return .failure(.emptyFrame) }
         guard line.count <= PadProtocol.maximumFrameBytes else {
