@@ -10,9 +10,9 @@ final class PadServerIdentity {
     let certificateDER: Data
     let fingerprintHex: String
 
-    static let keyTag = "id.evonex.evopad.server-identity.key.v1"
-    static let certLabel = "EvoPad Server Certificate v1"
-    static let identityLabel = "EvoPad Server Identity v1"
+    static let keyTag = "id.evonex.evopad.server-identity.key.v2"
+    static let certLabel = "EvoPad Server Certificate v2"
+    static let identityLabel = "EvoPad Server Identity v2"
 
     init(
         secIdentity: SecIdentity,
@@ -41,93 +41,169 @@ final class PadServerIdentity {
             throw error
         }
 
-        PadLog.network("PadServerIdentity: identity genuinely absent, generating new P-256 self-signed identity")
+        PadLog.network("PadServerIdentity: identity genuinely absent, generating new P-256 self-signed identity v2")
         return try generateAndPersist()
     }
 
     /// Queries macOS Keychain for existing SecIdentity matching the versioned label.
     private static func loadExistingIdentity() throws -> PadServerIdentity? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassIdentity,
+        let certQuery: [String: Any] = [
+            kSecClass as String: kSecClassCertificate,
             kSecReturnRef as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-            kSecAttrLabel as String: identityLabel
+            kSecMatchLimit as String: kSecMatchLimitAll
         ]
 
-        var item: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        var certItems: CFTypeRef?
+        let certStatus = SecItemCopyMatching(certQuery as CFDictionary, &certItems)
 
-        if status == errSecItemNotFound {
+        guard certStatus == errSecSuccess, let certList = certItems as? [SecCertificate] else {
+            PadLog.network("PadServerIdentity: no certificates found in Keychain")
             return nil
         }
 
-        guard status == errSecSuccess, let item else {
-            let error = NSError(domain: NSOSStatusErrorDomain, code: Int(status), userInfo: [
-                NSLocalizedDescriptionKey: "SecItemCopyMatching failed with OSStatus \(status)"
-            ])
-            throw error
+        for certificate in certList {
+            let summary = SecCertificateCopySubjectSummary(certificate) as String? ?? ""
+            guard summary.starts(with: "EvoPad v2") else { continue }
+
+            guard let publicKey = SecCertificateCopyKey(certificate),
+                  let attrs = SecKeyCopyAttributes(publicKey) as? [String: Any],
+                  let keySize = attrs[kSecAttrKeySizeInBits as String] as? Int,
+                  keySize == 256 else {
+                continue
+            }
+
+            var identityRef: SecIdentity?
+            let identityStatus = SecIdentityCreateWithCertificate(nil, certificate, &identityRef)
+            guard identityStatus == errSecSuccess, let identity = identityRef else {
+                continue
+            }
+
+            var keyRef: SecKey?
+            guard SecIdentityCopyPrivateKey(identity, &keyRef) == errSecSuccess, let privateKey = keyRef else {
+                continue
+            }
+
+            // Verify certificate and private key match by signing and verifying a test nonce
+            guard (try? verifyKeyMatchesCertificate(privateKey: privateKey, certificate: certificate)) == true else {
+                continue
+            }
+
+            let certDER = SecCertificateCopyData(certificate) as Data
+            let fingerprint = SHA256.hash(data: certDER).map { String(format: "%02x", $0) }.joined()
+
+            return PadServerIdentity(
+                secIdentity: identity,
+                certificate: certificate,
+                privateKey: privateKey,
+                certificateDER: certDER,
+                fingerprintHex: fingerprint
+            )
         }
 
-        let secIdentity = item as! SecIdentity
+        PadLog.network("PadServerIdentity: no matching EvoPad v2 certificate found")
+        return nil
+    }
 
-        var certRef: SecCertificate?
-        guard SecIdentityCopyCertificate(secIdentity, &certRef) == errSecSuccess, let certificate = certRef else {
-            throw NSError(domain: "id.evonex.evopad.security", code: -1, userInfo: [
-                NSLocalizedDescriptionKey: "Failed to copy certificate from SecIdentity"
-            ])
+    // MARK: - Internal ECDSA Signing & Verification Helpers
+
+    /// Creates an ECDSA signature over data, checking supported algorithms in priority order:
+    /// 1. .ecdsaSignatureDigestX962SHA256 (pre-computed 32-byte SHA-256 digest)
+    /// 2. .ecdsaSignatureDigestX962 (pre-computed 32-byte SHA-256 digest)
+    /// 3. .ecdsaSignatureMessageX962SHA256 (original message, hashed internally)
+    static func createECDSASignature(privateKey: SecKey, data: Data) throws -> (signature: Data, algorithm: SecKeyAlgorithm) {
+        let digest = Data(SHA256.hash(data: data))
+
+        if let attrs = SecKeyCopyAttributes(privateKey) as? [String: Any] {
+            print("DEBUG [createECDSASignature] PrivateKey attributes: \(attrs)")
         }
 
-        var keyRef: SecKey?
-        guard SecIdentityCopyPrivateKey(secIdentity, &keyRef) == errSecSuccess, let privateKey = keyRef else {
-            throw NSError(domain: "id.evonex.evopad.security", code: -2, userInfo: [
-                NSLocalizedDescriptionKey: "Failed to copy private key from SecIdentity"
-            ])
+        let candidateAlgorithms: [(SecKeyAlgorithm, Data, String)] = [
+            (.ecdsaSignatureDigestX962SHA256, digest, "ecdsaSignatureDigestX962SHA256"),
+            (.ecdsaSignatureDigestX962, digest, "ecdsaSignatureDigestX962"),
+            (.ecdsaSignatureMessageX962SHA256, data, "ecdsaSignatureMessageX962SHA256")
+        ]
+
+        var lastError: Error?
+        for (algorithm, payload, name) in candidateAlgorithms {
+            let isSupported = SecKeyIsAlgorithmSupported(privateKey, .sign, algorithm)
+            print("DEBUG [createECDSASignature] SecKeyIsAlgorithmSupported(\(name)): \(isSupported)")
+
+            var signError: Unmanaged<CFError>?
+            if let signature = SecKeyCreateSignature(
+                privateKey,
+                algorithm,
+                payload as CFData,
+                &signError
+            ) as Data? {
+                print("DEBUG [createECDSASignature] SecKeyCreateSignature SUCCESS with \(name)!")
+                return (signature, algorithm)
+            } else if let err = signError?.takeRetainedValue() {
+                print("DEBUG [createECDSASignature] SecKeyCreateSignature FAILED with \(name): \(err)")
+                lastError = err as Error
+            }
         }
 
-        // Verify certificate and private key match by signing and verifying a test nonce
-        guard try verifyKeyMatchesCertificate(privateKey: privateKey, certificate: certificate) else {
-            throw NSError(domain: "id.evonex.evopad.security", code: -3, userInfo: [
-                NSLocalizedDescriptionKey: "SecIdentity certificate and private key mismatch"
-            ])
+        let failureError = lastError ?? NSError(domain: "id.evonex.evopad.security", code: -10, userInfo: [
+            NSLocalizedDescriptionKey: "No supported ECDSA signing algorithm found for private key"
+        ])
+        PadLog.network("PadServerIdentity: all ECDSA signing candidates failed: \(failureError)")
+        throw failureError
+    }
+
+    /// Verifies an ECDSA signature over data using public key, trying preferred algorithm first then falling back.
+    static func verifyECDSASignature(publicKey: SecKey, data: Data, signature: Data, preferredAlgorithm: SecKeyAlgorithm? = nil) -> Bool {
+        let digest = Data(SHA256.hash(data: data))
+
+        var candidateAlgorithms: [(SecKeyAlgorithm, Data, String)] = []
+        if let preferred = preferredAlgorithm {
+            let payload = (preferred == .ecdsaSignatureMessageX962SHA256) ? data : digest
+            let name = (preferred == .ecdsaSignatureMessageX962SHA256) ? "preferred:ecdsaSignatureMessageX962SHA256" : "preferred:digest"
+            candidateAlgorithms.append((preferred, payload, name))
         }
 
-        let certDER = SecCertificateCopyData(certificate) as Data
-        let fingerprint = SHA256.hash(data: certDER).map { String(format: "%02x", $0) }.joined()
+        candidateAlgorithms.append((.ecdsaSignatureDigestX962SHA256, digest, "ecdsaSignatureDigestX962SHA256"))
+        candidateAlgorithms.append((.ecdsaSignatureDigestX962, digest, "ecdsaSignatureDigestX962"))
+        candidateAlgorithms.append((.ecdsaSignatureMessageX962SHA256, data, "ecdsaSignatureMessageX962SHA256"))
 
-        return PadServerIdentity(
-            secIdentity: secIdentity,
-            certificate: certificate,
-            privateKey: privateKey,
-            certificateDER: certDER,
-            fingerprintHex: fingerprint
-        )
+        for (algorithm, payload, name) in candidateAlgorithms {
+            if SecKeyIsAlgorithmSupported(publicKey, .verify, algorithm) {
+                var verifyError: Unmanaged<CFError>?
+                let valid = SecKeyVerifySignature(
+                    publicKey,
+                    algorithm,
+                    payload as CFData,
+                    signature as CFData,
+                    &verifyError
+                )
+                if valid {
+                    PadLog.network("PadServerIdentity: signature verified successfully using algorithm \(name)")
+                    return true
+                } else if let err = verifyError?.takeRetainedValue() {
+                    PadLog.network("PadServerIdentity: SecKeyVerifySignature with \(name) failed: \(err)")
+                }
+            } else {
+                PadLog.network("PadServerIdentity: algorithm \(name) not supported for verification by public key")
+            }
+        }
+
+        PadLog.network("PadServerIdentity: signature verification failed across all candidate algorithms")
+        return false
     }
 
     /// Verifies that private key and certificate public key form a valid matching pair.
     static func verifyKeyMatchesCertificate(privateKey: SecKey, certificate: SecCertificate) throws -> Bool {
-        guard let publicKey = SecCertificateCopyKey(certificate) else { return false }
-
-        let testPayload = "EvoPad-Identity-Verification-\(UUID().uuidString)".data(using: .utf8)!
-        var signError: Unmanaged<CFError>?
-        guard let signature = SecKeyCreateSignature(
-            privateKey,
-            .ecdsaSignatureMessageX962SHA256,
-            testPayload as CFData,
-            &signError
-        ) as Data? else {
-            if let err = signError?.takeRetainedValue() {
-                throw err as Error
-            }
+        guard let publicKey = SecCertificateCopyKey(certificate) else {
+            PadLog.network("PadServerIdentity: failed to extract public key from certificate")
             return false
         }
 
-        var verifyError: Unmanaged<CFError>?
-        let verified = SecKeyVerifySignature(
-            publicKey,
-            .ecdsaSignatureMessageX962SHA256,
-            testPayload as CFData,
-            signature as CFData,
-            &verifyError
+        let testPayload = "EvoPad-Identity-Verification-\(UUID().uuidString)".data(using: .utf8)!
+        let (signature, algorithm) = try createECDSASignature(privateKey: privateKey, data: testPayload)
+        let verified = verifyECDSASignature(
+            publicKey: publicKey,
+            data: testPayload,
+            signature: signature,
+            preferredAlgorithm: algorithm
         )
         return verified
     }
@@ -141,25 +217,34 @@ final class PadServerIdentity {
             kSecPrivateKeyAttrs as String: [
                 kSecAttrIsPermanent as String: true,
                 kSecAttrApplicationTag as String: keyTag.data(using: .utf8)!,
-                kSecAttrLabel as String: identityLabel
+                kSecAttrLabel as String: identityLabel,
+                kSecAttrCanSign as String: true
             ]
         ]
 
         var genError: Unmanaged<CFError>?
         guard let privateKey = SecKeyCreateRandomKey(keyAttributes as CFDictionary, &genError) else {
-            let err = genError?.takeRetainedValue() ?? NSError(domain: "id.evonex.evopad.security", code: -4, userInfo: nil)
-            throw err
+            if let err = genError?.takeRetainedValue() {
+                throw err as Error
+            }
+            throw NSError(domain: "id.evonex.evopad.security", code: -4, userInfo: [
+                NSLocalizedDescriptionKey: "SecKeyCreateRandomKey failed to create private key"
+            ])
         }
 
         guard let publicKey = SecKeyCopyPublicKey(privateKey),
               let publicKeyData = SecKeyCopyExternalRepresentation(publicKey, &genError) as Data? else {
-            let err = genError?.takeRetainedValue() ?? NSError(domain: "id.evonex.evopad.security", code: -5, userInfo: nil)
-            throw err
+            if let err = genError?.takeRetainedValue() {
+                throw err as Error
+            }
+            throw NSError(domain: "id.evonex.evopad.security", code: -5, userInfo: [
+                NSLocalizedDescriptionKey: "SecKeyCopyExternalRepresentation failed to extract public key"
+            ])
         }
 
         // 2. Generate self-signed X.509 v3 DER certificate
         let deviceName = Host.current().localizedName ?? "Mac"
-        let commonName = "EvoPad (\(deviceName))"
+        let commonName = "EvoPad v2 (\(deviceName))"
         let certDER = try ASN1X509Generator.generateSelfSignedCertificate(
             commonName: commonName,
             publicKeyData: publicKeyData,
@@ -179,20 +264,37 @@ final class PadServerIdentity {
             kSecAttrLabel as String: identityLabel
         ]
         let addStatus = SecItemAdd(certAddQuery as CFDictionary, nil)
+        print("DEBUG [generateAndPersist] SecItemAdd cert addStatus: \(addStatus)")
         guard addStatus == errSecSuccess || addStatus == errSecDuplicateItem else {
             throw NSError(domain: NSOSStatusErrorDomain, code: Int(addStatus), userInfo: [
                 NSLocalizedDescriptionKey: "Failed to persist certificate to Keychain: \(addStatus)"
             ])
         }
 
-        // 4. Retrieve and verify the newly formed SecIdentity
-        guard let identity = try loadExistingIdentity() else {
+        // 4. Form and verify the newly formed SecIdentity
+        var identityRef: SecIdentity?
+        let identityStatus = SecIdentityCreateWithCertificate(nil, certificate, &identityRef)
+        guard identityStatus == errSecSuccess, let secIdentity = identityRef else {
             throw NSError(domain: "id.evonex.evopad.security", code: -7, userInfo: [
-                NSLocalizedDescriptionKey: "SecIdentity could not be retrieved from Keychain after persistence"
+                NSLocalizedDescriptionKey: "SecIdentityCreateWithCertificate failed with status \(identityStatus)"
             ])
         }
 
-        return identity
+        guard try verifyKeyMatchesCertificate(privateKey: privateKey, certificate: certificate) else {
+            throw NSError(domain: "id.evonex.evopad.security", code: -8, userInfo: [
+                NSLocalizedDescriptionKey: "SecIdentity certificate and private key mismatch after generation"
+            ])
+        }
+
+        let fingerprint = SHA256.hash(data: certDER).map { String(format: "%02x", $0) }.joined()
+
+        return PadServerIdentity(
+            secIdentity: secIdentity,
+            certificate: certificate,
+            privateKey: privateKey,
+            certificateDER: certDER,
+            fingerprintHex: fingerprint
+        )
     }
 }
 
@@ -274,16 +376,10 @@ enum ASN1X509Generator {
         )
 
         // Sign TBSCertificate with P-256 private key
-        var signError: Unmanaged<CFError>?
-        guard let signatureData = SecKeyCreateSignature(
-            privateKey,
-            .ecdsaSignatureMessageX962SHA256,
-            tbsCertificate as CFData,
-            &signError
-        ) as Data? else {
-            let err = signError?.takeRetainedValue() ?? NSError(domain: "id.evonex.evopad.security", code: -10, userInfo: nil)
-            throw err
-        }
+        let (signatureData, _) = try PadServerIdentity.createECDSASignature(
+            privateKey: privateKey,
+            data: tbsCertificate
+        )
 
         let signatureBitString = derBitString(signatureData, unusedBits: 0)
 

@@ -188,7 +188,7 @@ final class PadKeychainStore {
         defer { lock.unlock() }
 
         var devices = loadDevicesInternal()
-        devices.removeAll { $0.deviceId == device.deviceId }
+        devices.removeAll { $0.deviceId == deviceId }
         try persistDevicesInternal(devices)
     }
 
@@ -260,8 +260,9 @@ enum PadCertificateVerifier {
         trust: SecTrust,
         pinnedFingerprintHex: String
     ) -> Bool {
-        guard let certificate = SecTrustGetCertificateAtIndex(trust, 0) else {
-            PadLog.network("PadCertificateVerifier: no certificate at index 0")
+        guard let chain = SecTrustCopyCertificateChain(trust) as? [SecCertificate],
+              let certificate = chain.first else {
+            PadLog.network("PadCertificateVerifier: no certificate in trust chain")
             return false
         }
 

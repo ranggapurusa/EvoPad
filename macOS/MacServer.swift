@@ -18,6 +18,7 @@ final class MacServer: ObservableObject {
     @Published private(set) var certFingerprintHex = ""
     @Published private(set) var currentQRData: PadPairingQRData?
     @Published private(set) var qrImage: NSImage?
+    @Published private(set) var qrErrorMessage: String?
     @Published private(set) var pairedDevices: [PadPairedDevice] = []
     @Published var pendingPairingRequest: PendingPairingApproval?
 
@@ -79,6 +80,8 @@ final class MacServer: ObservableObject {
         }
     }
 
+    private var isInitializing = false
+
     func start() {
         guard listener == nil else { return }
         refreshPermission()
@@ -89,9 +92,11 @@ final class MacServer: ObservableObject {
             let identity = try PadServerIdentity.loadOrCreate()
             self.serverIdentity = identity
             self.certFingerprintHex = identity.fingerprintHex
+            self.qrErrorMessage = nil
             PadLog.network("MacServer: loaded server identity with fingerprint: \(identity.fingerprintHex)")
         } catch {
             statusText = "Gagal memuat Server Identity dari Keychain: \(error.localizedDescription)"
+            qrErrorMessage = "Gagal memuat Server Identity dari Keychain: \(error.localizedDescription)"
             PadLog.network("MacServer: server identity error: \(error)")
             return
         }
@@ -99,12 +104,57 @@ final class MacServer: ObservableObject {
         guard let identity = serverIdentity else { return }
 
         // 2. Start TLS 1.3 Listener (M2.2)
-        do {
-            guard let port = NWEndpoint.Port(rawValue: PadProtocol.port) else {
-                statusText = "Port tidak valid"
+        startListener(with: identity)
+    }
+
+    func retryIdentityInitialization() {
+        securityQueue.async { [weak self] in
+            guard let self else { return }
+            guard !self.isInitializing else {
+                PadLog.network("MacServer: identity initialization already in progress, ignoring retry")
                 return
             }
+            self.isInitializing = true
+            defer { self.isInitializing = false }
 
+            DispatchQueue.main.async {
+                self.statusText = "Menginisialisasi Server Identity..."
+                self.qrErrorMessage = nil
+            }
+
+            do {
+                let identity = try PadServerIdentity.loadOrCreate()
+                self.serverIdentity = identity
+                DispatchQueue.main.async {
+                    self.certFingerprintHex = identity.fingerprintHex
+                    self.qrErrorMessage = nil
+                    self.statusText = "Server Identity berhasil dimuat"
+                }
+                PadLog.network("MacServer: successfully reloaded server identity: \(identity.fingerprintHex)")
+                self.startListener(with: identity)
+            } catch {
+                DispatchQueue.main.async {
+                    self.statusText = "Gagal memuat Server Identity dari Keychain: \(error.localizedDescription)"
+                    self.qrErrorMessage = "Gagal memuat Server Identity dari Keychain: \(error.localizedDescription)"
+                }
+                PadLog.network("MacServer: retry server identity error: \(error)")
+            }
+        }
+    }
+
+    private func startListener(with identity: PadServerIdentity) {
+        guard listener == nil else {
+            PadLog.network("MacServer: listener already running, skipping startListener")
+            return
+        }
+        guard let port = NWEndpoint.Port(rawValue: PadProtocol.port) else {
+            DispatchQueue.main.async {
+                self.statusText = "Port tidak valid"
+            }
+            return
+        }
+
+        do {
             let parameters = PadProtocol.tlsServerParameters(secIdentity: identity.secIdentity)
             let newListener = try NWListener(using: parameters, on: port)
 
@@ -142,7 +192,9 @@ final class MacServer: ObservableObject {
             listener = newListener
             newListener.start(queue: .main)
         } catch {
-            statusText = "Tidak dapat menjalankan server TLS: \(error.localizedDescription)"
+            DispatchQueue.main.async {
+                self.statusText = "Tidak dapat menjalankan server TLS: \(error.localizedDescription)"
+            }
         }
     }
 
@@ -163,7 +215,16 @@ final class MacServer: ObservableObject {
 
     func generateNewPairingQR() {
         securityQueue.async { [weak self] in
-            guard let self, let identity = self.serverIdentity else { return }
+            guard let self else { return }
+
+            guard let identity = self.serverIdentity else {
+                DispatchQueue.main.async {
+                    self.qrErrorMessage = "Server Identity belum siap: \(self.statusText)"
+                    self.qrImage = nil
+                }
+                PadLog.network("MacServer: generateNewPairingQR failed because serverIdentity is nil")
+                return
+            }
 
             let secretHex = PadCryptoUtils.randomHex(count: 32)
             let expiry = Date().timeIntervalSince1970 + PadSecurityConstants.pairingQRExpirySeconds
@@ -181,9 +242,17 @@ final class MacServer: ObservableObject {
                 expiresAt: expiry
             )
 
-            let image = self.createQRCodeImage(from: qrData.serialize() ?? "")
+            guard let serialized = qrData.serialize(),
+                  let image = self.createQRCodeImage(from: serialized) else {
+                DispatchQueue.main.async {
+                    self.qrErrorMessage = "Gagal membuat gambar QR code"
+                    self.qrImage = nil
+                }
+                return
+            }
 
             DispatchQueue.main.async {
+                self.qrErrorMessage = nil
                 self.currentQRData = qrData
                 self.qrImage = image
             }
@@ -238,9 +307,9 @@ final class MacServer: ObservableObject {
                 requestId: pairingId,
                 type: .authResult,
                 payload: PadPayloadV2(
+                    pairingToken: pairingTokenHex,
                     status: "approved",
-                    message: "Pairing disetujui",
-                    pairingToken: pairingTokenHex
+                    message: "Pairing disetujui"
                 )
             )
             self.sendEnvelopeV2(response, over: pending.connection)
@@ -295,7 +364,7 @@ final class MacServer: ObservableObject {
     // MARK: - Connection Isolation & Lifecycle (M2.4 & M2.5)
 
     private func handleNewConnection(_ connection: NWConnection) {
-        securityQueue.async { [weak self] in
+        securityQueue.async { [weak self, connection] in
             guard let self else { return }
 
             // Guard pending count limit
@@ -419,7 +488,8 @@ final class MacServer: ObservableObject {
             }
 
             if error != nil || isComplete {
-                self.inputQueue.async {
+                self.inputQueue.async { [weak self, weak connection] in
+                    guard let self else { return }
                     if self.activeConnection === connection {
                         self.eventController.releaseAllButtons()
                         self.activeConnection = nil
@@ -631,7 +701,7 @@ final class MacServer: ObservableObject {
                         PadEnvelopeV2(
                             requestId: envelope.requestId,
                             type: .authResult,
-                            payload: PadPayloadV2(status: "authenticated", hmac: serverHmac)
+                            payload: PadPayloadV2(hmac: serverHmac, status: "authenticated")
                         ),
                         over: connection
                     )

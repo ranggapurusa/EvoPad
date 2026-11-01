@@ -48,13 +48,19 @@ struct MacContentView: View {
                                 Text("Sertifikat Server (SHA-256 Fingerprint)")
                                     .font(.caption.weight(.medium))
                                     .foregroundStyle(.secondary)
-                                Text(server.certFingerprintHex.isEmpty ? "Memuat identity..." : server.certFingerprintHex)
+                                Text(server.certFingerprintHex.isEmpty ? "Identity belum siap" : server.certFingerprintHex)
                                     .font(.system(size: 11, design: .monospaced))
                                     .lineLimit(1)
                                     .truncationMode(.middle)
                                     .textSelection(.enabled)
                             }
                             Spacer()
+                            if server.certFingerprintHex.isEmpty {
+                                Button("Muat Ulang Identity") {
+                                    server.retryIdentityInitialization()
+                                }
+                                .buttonStyle(.bordered)
+                            }
                             Button("Pairing iPad Baru") {
                                 server.generateNewPairingQR()
                                 startQRCountdown()
@@ -246,8 +252,56 @@ struct MacContentView: View {
                 Text("Buka aplikasi EvoPad di iPad Anda, lalu pilih 'Pindai QR' untuk pairing instan.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
 
-                if let image = server.qrImage {
+                if let errorMessage = server.qrErrorMessage {
+                    VStack(spacing: 12) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 36))
+                            .foregroundStyle(.orange)
+
+                        Text("Gagal Menyiapkan Pairing")
+                            .font(.subheadline.weight(.semibold))
+
+                        Text(errorMessage)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
+
+                        Button("Coba Lagi") {
+                            server.retryIdentityInitialization()
+                            server.generateNewPairingQR()
+                            startQRCountdown()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.indigo)
+                    }
+                    .frame(width: 260, height: 220)
+                } else if qrTimeRemaining == 0 {
+                    VStack(spacing: 12) {
+                        Image(systemName: "clock.badge.xmark")
+                            .font(.system(size: 36))
+                            .foregroundStyle(.red)
+
+                        Text("Kode QR Kedaluwarsa")
+                            .font(.subheadline.weight(.semibold))
+
+                        Text("Demi keamanan, kode QR hanya berlaku selama 60 detik.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
+
+                        Button("Buat Ulang Kode QR") {
+                            server.generateNewPairingQR()
+                            startQRCountdown()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.indigo)
+                    }
+                    .frame(width: 260, height: 220)
+                } else if let image = server.qrImage {
                     Image(nsImage: image)
                         .interpolation(.none)
                         .resizable()
@@ -256,17 +310,22 @@ struct MacContentView: View {
                         .padding(8)
                         .background(Color.white)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
-                } else {
-                    ProgressView()
-                        .frame(width: 220, height: 220)
-                }
 
-                HStack {
-                    Image(systemName: "timer")
-                    Text("Kode kedaluwarsa dalam \(qrTimeRemaining) detik")
+                    HStack {
+                        Image(systemName: "timer")
+                        Text("Kode kedaluwarsa dalam \(qrTimeRemaining) detik")
+                    }
+                    .font(.caption.monospaced())
+                    .foregroundStyle(qrTimeRemaining > 10 ? Color.secondary : Color.red)
+                } else {
+                    VStack(spacing: 12) {
+                        ProgressView()
+                        Text("Menyiapkan kunci dan kode QR...")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(width: 220, height: 220)
                 }
-                .font(.caption.monospaced())
-                .foregroundStyle(qrTimeRemaining > 10 ? .secondary : .red)
 
                 Button("Tutup") {
                     stopQRCountdown()
@@ -276,6 +335,11 @@ struct MacContentView: View {
             }
             .padding(24)
             .frame(width: 340)
+            .onChange(of: server.qrErrorMessage) { newValue in
+                if newValue != nil {
+                    stopQRCountdown()
+                }
+            }
         }
     }
 
