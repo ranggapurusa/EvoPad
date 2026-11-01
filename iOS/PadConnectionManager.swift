@@ -286,6 +286,33 @@ final class PadConnectionManager: ObservableObject {
         sendV2(envelope)
     }
 
+    func sendMacro(macroId: String, steps: [PadMacroStepV2]) {
+        guard isAuthenticated else { return }
+        let envelope = PadEnvelopeV2.macro(macroId: macroId, steps: steps)
+        sendV2(envelope)
+        DispatchQueue.main.async {
+            self.macFeedback = "Macro '\(macroId)' dikirim..."
+        }
+    }
+
+    func sendMediaKey(_ key: PadMediaControlKey) {
+        guard isAuthenticated else { return }
+        let envelope = PadEnvelopeV2.media(key: key)
+        sendV2(envelope)
+        DispatchQueue.main.async {
+            self.macFeedback = "Media: \(key.title) dikirim..."
+        }
+    }
+
+    func sendSystemAction(_ action: PadSystemControlAction, targetApp: String? = nil) {
+        guard isAuthenticated else { return }
+        let envelope = PadEnvelopeV2.system(action: action, targetApp: targetApp)
+        sendV2(envelope)
+        DispatchQueue.main.async {
+            self.macFeedback = "System: \(action.title) dikirim..."
+        }
+    }
+
     private func sendEnvelopeDirect(_ envelope: PadEnvelopeV2, over connection: NWConnection) {
         guard var data = try? JSONEncoder().encode(envelope) else { return }
         data.append(0x0A)

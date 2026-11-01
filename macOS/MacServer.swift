@@ -51,6 +51,7 @@ final class MacServer: ObservableObject {
     private let securityQueue = DispatchQueue(label: "id.evonex.evopad.mac-security", qos: .default)
     private let eventController = InputEventController()
     private let keyboardController = PadKeyboardController()
+    private lazy var macroExecutor = PadMacroExecutor(keyboardController: keyboardController)
     private var serverIdentity: PadServerIdentity?
 
     // Active one-time pairing QR secret
@@ -464,6 +465,7 @@ final class MacServer: ObservableObject {
                 case .failed, .cancelled:
                     self.eventController.releaseAllButtons()
                     self.keyboardController.releaseAll()
+                    self.macroExecutor.cancelCurrentMacro()
                     DispatchQueue.main.async {
                         guard let connection, self.activeConnection === connection else { return }
                         self.lastInputText = "Koneksi terputus — tombol mouse & keyboard dilepas"
@@ -517,6 +519,7 @@ final class MacServer: ObservableObject {
                     if self.activeConnection === connection {
                         self.eventController.releaseAllButtons()
                         self.keyboardController.releaseAll()
+                        self.macroExecutor.cancelCurrentMacro()
                         self.activeConnection = nil
                         self.activeSession = nil
                     }
@@ -903,15 +906,100 @@ final class MacServer: ObservableObject {
                 }
             }
 
-        case .textInput, .mediaControl, .systemControl, .macroExecute:
-            sendEnvelopeV2(
-                .error(
-                    requestId: envelope.requestId,
-                    code: .unsupportedAction,
-                    message: "Tipe \(envelope.type.rawValue) belum diaktifkan"
-                ),
-                over: connection
-            )
+        case .macroExecute:
+            guard let payload = envelope.payload,
+                  let steps = payload.steps,
+                  let macroId = payload.macroId ?? payload.systemAction else {
+                sendEnvelopeV2(
+                    .error(requestId: envelope.requestId, code: .invalidPayload, message: "Payload macroExecute tidak lengkap (steps & macroId wajib)"),
+                    over: connection
+                )
+                return
+            }
+
+            macroExecutor.executeMacro(macroId: macroId, steps: steps) { [weak self, weak connection] ok, errCode, message in
+                guard let self, let connection else { return }
+                if ok {
+                    self.sendEnvelopeV2(
+                        .ack(requestId: envelope.requestId, accepted: true, message: message),
+                        over: connection
+                    )
+                    DispatchQueue.main.async {
+                        self.lastInputText = message
+                    }
+                } else {
+                    self.sendEnvelopeV2(
+                        .error(requestId: envelope.requestId, code: errCode ?? .invalidPayload, message: message),
+                        over: connection
+                    )
+                    DispatchQueue.main.async {
+                        self.lastInputText = "Macro gagal: \(message)"
+                    }
+                }
+            }
+
+        case .mediaControl:
+            guard let payload = envelope.payload,
+                  let mediaKeyStr = payload.mediaKey,
+                  let key = PadMediaControlKey(rawValue: mediaKeyStr) else {
+                sendEnvelopeV2(
+                    .error(requestId: envelope.requestId, code: .invalidPayload, message: "mediaKey tidak valid"),
+                    over: connection
+                )
+                return
+            }
+
+            keyboardController.handleMediaKey(key) { [weak self, weak connection] ok, msg in
+                guard let self, let connection else { return }
+                if ok {
+                    self.sendEnvelopeV2(.ack(requestId: envelope.requestId, accepted: true, message: msg), over: connection)
+                    DispatchQueue.main.async { self.lastInputText = msg }
+                } else {
+                    self.sendEnvelopeV2(.error(requestId: envelope.requestId, code: .permissionDenied, message: msg), over: connection)
+                    DispatchQueue.main.async { self.lastInputText = "Media gagal: \(msg)" }
+                }
+            }
+
+        case .systemControl:
+            guard let payload = envelope.payload,
+                  let actionStr = payload.systemAction,
+                  let action = PadSystemControlAction(rawValue: actionStr) else {
+                sendEnvelopeV2(
+                    .error(requestId: envelope.requestId, code: .invalidPayload, message: "systemAction tidak valid"),
+                    over: connection
+                )
+                return
+            }
+
+            keyboardController.handleSystemAction(action, targetApp: payload.text) { [weak self, weak connection] ok, msg in
+                guard let self, let connection else { return }
+                if ok {
+                    self.sendEnvelopeV2(.ack(requestId: envelope.requestId, accepted: true, message: msg), over: connection)
+                    DispatchQueue.main.async { self.lastInputText = msg }
+                } else {
+                    self.sendEnvelopeV2(.error(requestId: envelope.requestId, code: .permissionDenied, message: msg), over: connection)
+                    DispatchQueue.main.async { self.lastInputText = "System action gagal: \(msg)" }
+                }
+            }
+
+        case .textInput:
+            guard let payload = envelope.payload,
+                  let text = payload.text,
+                  !text.isEmpty else {
+                sendEnvelopeV2(
+                    .error(requestId: envelope.requestId, code: .invalidPayload, message: "Teks kosong"),
+                    over: connection
+                )
+                return
+            }
+
+            let ok = self.macroExecutor.typeTextExternal(text)
+            if ok {
+                sendEnvelopeV2(.ack(requestId: envelope.requestId, accepted: true, message: "Teks diketik"), over: connection)
+                DispatchQueue.main.async { self.lastInputText = "Teks diketik: \(text)" }
+            } else {
+                sendEnvelopeV2(.error(requestId: envelope.requestId, code: .permissionDenied, message: "Gagal mengetik teks"), over: connection)
+            }
 
         default:
             break

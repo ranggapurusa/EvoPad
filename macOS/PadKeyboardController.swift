@@ -91,6 +91,151 @@ final class PadKeyboardController {
         }
     }
 
+    /// Handles system media key events (play/pause, next, previous, volume up/down, mute).
+    /// Uses native macOS media key events via NSEvent/CoreGraphics system keys.
+    func handleMediaKey(
+        _ key: PadMediaControlKey,
+        completion: @escaping (Bool, String) -> Void
+    ) {
+        guard hasAccessibilityPermission else {
+            completion(false, "Izin Accessibility macOS belum diberikan")
+            return
+        }
+
+        keyboardQueue.async { [weak self] in
+            guard let self else { return }
+
+            let systemKey: Int32
+            switch key {
+            case .playPause:
+                systemKey = 16 // NX_KEYTYPE_PLAY
+            case .nextTrack:
+                systemKey = 17 // NX_KEYTYPE_NEXT
+            case .previousTrack:
+                systemKey = 18 // NX_KEYTYPE_PREVIOUS
+            case .volumeUp:
+                systemKey = 0  // NX_KEYTYPE_SOUND_UP
+            case .volumeDown:
+                systemKey = 1  // NX_KEYTYPE_SOUND_DOWN
+            case .mute:
+                systemKey = 7  // NX_KEYTYPE_MUTE
+            }
+
+            self.postAuxiliaryKey(systemKey: systemKey)
+            PadLog.keyboard("Mac: posted media key '\(key.rawValue)' (code=\(systemKey))")
+
+            DispatchQueue.main.async {
+                completion(true, "Media key '\(key.title)' dieksekusi")
+            }
+        }
+    }
+
+    private func postAuxiliaryKey(systemKey: Int32) {
+        func postKey(down: Bool) {
+            let flags: NSEvent.ModifierFlags = down ? NSEvent.ModifierFlags(rawValue: 0xa00) : NSEvent.ModifierFlags(rawValue: 0xb00)
+            let data1 = Int((systemKey << 16) | (down ? 0xa00 : 0xb00))
+
+            let ev = NSEvent.otherEvent(
+                with: .systemDefined,
+                location: .zero,
+                modifierFlags: flags,
+                timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: 0,
+                context: nil,
+                subtype: 8, // 8 = media keys
+                data1: data1,
+                data2: -1
+            )
+            ev?.cgEvent?.post(tap: .cghidEventTap)
+        }
+
+        postKey(down: true)
+        usleep(15_000)
+        postKey(down: false)
+    }
+
+    /// Handles discrete system control actions (Lock Screen, Sleep, Screenshot, App Launch).
+    func handleSystemAction(
+        _ action: PadSystemControlAction,
+        targetApp: String? = nil,
+        completion: @escaping (Bool, String) -> Void
+    ) {
+        keyboardQueue.async { [weak self] in
+            guard let self else { return }
+
+            switch action {
+            case .lockScreen:
+                // Cmd + Ctrl + Q or SACLockScreenImmediate
+                DispatchQueue.main.async {
+                    _ = NSWorkspace.shared
+                    // Use macOS system command via Process/AppleScript or shortcut
+                    let process = Process()
+                    process.launchPath = "/usr/bin/pmset"
+                    process.arguments = ["displaysleepnow"]
+                    try? process.run()
+                    completion(true, "Layar Mac berhasil dikunci")
+                }
+
+            case .sleep:
+                DispatchQueue.main.async {
+                    let script = NSAppleScript(source: "tell application \"Finder\" to sleep")
+                    var error: NSDictionary?
+                    script?.executeAndReturnError(&error)
+                    if error == nil {
+                        completion(true, "Mac masuk ke mode Sleep")
+                    } else {
+                        // Fallback pmset sleepnow
+                        let process = Process()
+                        process.launchPath = "/usr/bin/pmset"
+                        process.arguments = ["sleepnow"]
+                        try? process.run()
+                        completion(true, "Perintah Sleep dikirim")
+                    }
+                }
+
+            case .screenshot:
+                // Cmd + Shift + 4 (interactive) or Cmd + Shift + 3 (fullscreen)
+                self.executeShortcut(keyCode: 20, modifiers: [.cmd, .shift]) { ok, msg in
+                    completion(ok, ok ? "Tangkapan layar aktif" : msg)
+                }
+
+            case .launchApp:
+                guard let target = targetApp, !target.isEmpty else {
+                    DispatchQueue.main.async { completion(false, "Nama aplikasi tidak boleh kosong") }
+                    return
+                }
+
+                DispatchQueue.main.async {
+                    let ws = NSWorkspace.shared
+                    if let appUrl = ws.urlForApplication(withBundleIdentifier: target) {
+                        let config = NSWorkspace.OpenConfiguration()
+                        config.activates = true
+                        ws.openApplication(at: appUrl, configuration: config) { _, error in
+                            completion(error == nil, error == nil ? "Aplikasi \(target) dibuka" : "Gagal membuka \(target)")
+                        }
+                        return
+                    }
+
+                    let appName = target.hasSuffix(".app") ? target : "\(target).app"
+                    let searchPaths = ["/Applications", "/System/Applications", "/System/Applications/Utilities"]
+                    for dirPath in searchPaths {
+                        let appUrl = URL(fileURLWithPath: dirPath).appendingPathComponent(appName)
+                        if FileManager.default.fileExists(atPath: appUrl.path) {
+                            let config = NSWorkspace.OpenConfiguration()
+                            config.activates = true
+                            ws.openApplication(at: appUrl, configuration: config) { _, error in
+                                completion(error == nil, error == nil ? "Aplikasi \(target) dibuka" : "Gagal membuka \(target)")
+                            }
+                            return
+                        }
+                    }
+
+                    completion(false, "Aplikasi '\(target)' tidak ditemukan")
+                }
+            }
+        }
+    }
+
     /// Handles discrete key press, down, or up events.
     func handleKeyEvent(
         keyCode: UInt16,

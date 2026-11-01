@@ -25,6 +25,10 @@
 		A00000000000000000000046 /* PadQRScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000045 /* PadQRScannerView.swift */; };
 		A00000000000000000000048 /* PadKeyboardController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000047 /* PadKeyboardController.swift */; };
 		A00000000000000000000050 /* PadVirtualKeyboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000049 /* PadVirtualKeyboardView.swift */; };
+		A00000000000000000000052 /* PadMacroStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000051 /* PadMacroStore.swift */; };
+		A00000000000000000000054 /* PadMacroExecutor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000053 /* PadMacroExecutor.swift */; };
+		A00000000000000000000056 /* PadMacroEditorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000055 /* PadMacroEditorSheet.swift */; };
+		A00000000000000000000058 /* PadControlPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000057 /* PadControlPanelView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -46,6 +50,10 @@
 		A00000000000000000000043 /* PadServerIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadServerIdentity.swift; sourceTree = "<group>"; };
 		A00000000000000000000047 /* PadKeyboardController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadKeyboardController.swift; sourceTree = "<group>"; };
 		A00000000000000000000049 /* PadVirtualKeyboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadVirtualKeyboardView.swift; sourceTree = "<group>"; };
+		A00000000000000000000051 /* PadMacroStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadMacroStore.swift; sourceTree = "<group>"; };
+		A00000000000000000000053 /* PadMacroExecutor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadMacroExecutor.swift; sourceTree = "<group>"; };
+		A00000000000000000000055 /* PadMacroEditorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadMacroEditorSheet.swift; sourceTree = "<group>"; };
+		A00000000000000000000057 /* PadControlPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadControlPanelView.swift; sourceTree = "<group>"; };
 		A00000000000000000000024 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -105,6 +113,9 @@
 				A0000000000000000000001E /* PadContentView.swift */,
 				A00000000000000000000045 /* PadQRScannerView.swift */,
 				A00000000000000000000049 /* PadVirtualKeyboardView.swift */,
+				A00000000000000000000051 /* PadMacroStore.swift */,
+				A00000000000000000000055 /* PadMacroEditorSheet.swift */,
+				A00000000000000000000057 /* PadControlPanelView.swift */,
 				A0000000000000000000001F /* Info.plist */,
 			);
 			path = iOS;
@@ -119,6 +130,7 @@
 				A00000000000000000000023 /* MacContentView.swift */,
 				A00000000000000000000043 /* PadServerIdentity.swift */,
 				A00000000000000000000047 /* PadKeyboardController.swift */,
+				A00000000000000000000053 /* PadMacroExecutor.swift */,
 				A00000000000000000000024 /* Info.plist */,
 			);
 			path = macOS;
@@ -228,6 +240,9 @@
 				A00000000000000000000029 /* PadContentView.swift in Sources */,
 				A00000000000000000000046 /* PadQRScannerView.swift in Sources */,
 				A00000000000000000000050 /* PadVirtualKeyboardView.swift in Sources */,
+				A00000000000000000000052 /* PadMacroStore.swift in Sources */,
+				A00000000000000000000056 /* PadMacroEditorSheet.swift in Sources */,
+				A00000000000000000000058 /* PadControlPanelView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -244,6 +259,7 @@
 				A0000000000000000000002E /* MacContentView.swift in Sources */,
 				A00000000000000000000044 /* PadServerIdentity.swift in Sources */,
 				A00000000000000000000048 /* PadKeyboardController.swift in Sources */,
+				A00000000000000000000054 /* PadMacroExecutor.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

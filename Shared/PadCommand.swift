@@ -250,6 +250,66 @@ enum PadModifierFlagV2: String, Codable, Hashable {
     case fn
 }
 
+enum PadMediaControlKey: String, Codable, CaseIterable, Identifiable {
+    case playPause = "playPause"
+    case nextTrack = "nextTrack"
+    case previousTrack = "previousTrack"
+    case volumeUp = "volumeUp"
+    case volumeDown = "volumeDown"
+    case mute = "mute"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .playPause: return "Play / Pause"
+        case .nextTrack: return "Next"
+        case .previousTrack: return "Previous"
+        case .volumeUp: return "Volume Up"
+        case .volumeDown: return "Volume Down"
+        case .mute: return "Mute"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .playPause: return "playpause.fill"
+        case .nextTrack: return "forward.fill"
+        case .previousTrack: return "backward.fill"
+        case .volumeUp: return "speaker.wave.3.fill"
+        case .volumeDown: return "speaker.wave.1.fill"
+        case .mute: return "speaker.slash.fill"
+        }
+    }
+}
+
+enum PadSystemControlAction: String, Codable, CaseIterable, Identifiable {
+    case lockScreen = "lockScreen"
+    case sleep = "sleep"
+    case screenshot = "screenshot"
+    case launchApp = "launchApp"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .lockScreen: return "Kunci Layar"
+        case .sleep: return "Tidur (Sleep)"
+        case .screenshot: return "Tangkapan Layar"
+        case .launchApp: return "Buka Aplikasi"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .lockScreen: return "lock.fill"
+        case .sleep: return "moon.fill"
+        case .screenshot: return "camera.viewfinder"
+        case .launchApp: return "app.badge.fill"
+        }
+    }
+}
+
 enum PadStandardShortcut: String, Codable, Hashable, CaseIterable, Identifiable {
     case copy = "copy"
     case paste = "paste"
@@ -538,6 +598,49 @@ struct PadEnvelopeV2: Codable, Equatable {
                 keyCode: keyCode,
                 keyPhase: phase,
                 modifiers: modifiers
+            )
+        )
+    }
+
+    static func macro(
+        macroId: String,
+        steps: [PadMacroStepV2],
+        requestId: String = UUID().uuidString
+    ) -> PadEnvelopeV2 {
+        PadEnvelopeV2(
+            requestId: requestId,
+            type: .macroExecute,
+            payload: PadPayloadV2(
+                macroId: macroId,
+                steps: steps
+            )
+        )
+    }
+
+    static func media(
+        key: PadMediaControlKey,
+        requestId: String = UUID().uuidString
+    ) -> PadEnvelopeV2 {
+        PadEnvelopeV2(
+            requestId: requestId,
+            type: .mediaControl,
+            payload: PadPayloadV2(
+                mediaKey: key.rawValue
+            )
+        )
+    }
+
+    static func system(
+        action: PadSystemControlAction,
+        targetApp: String? = nil,
+        requestId: String = UUID().uuidString
+    ) -> PadEnvelopeV2 {
+        PadEnvelopeV2(
+            requestId: requestId,
+            type: .systemControl,
+            payload: PadPayloadV2(
+                text: targetApp,
+                systemAction: action.rawValue
             )
         )
     }

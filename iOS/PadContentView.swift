@@ -2,9 +2,20 @@ import SwiftUI
 
 struct PadContentView: View {
     @StateObject private var connection = PadConnectionManager()
+    @StateObject private var macroStore = PadMacroStore.shared
     @State private var inputFeedback = "Siap menerima gesture"
     @State private var showingQRScanner = false
     @State private var showingVirtualKeyboard = false
+    @State private var showingMacroEditor = false
+    @State private var editingMacro: PadMacroDefinition?
+    @State private var activeDockTab: PadDockTab = .shortcuts
+
+    enum PadDockTab: String, CaseIterable, Identifiable {
+        case shortcuts = "Shortcuts"
+        case macros = "Macros"
+        case control = "Control"
+        var id: String { rawValue }
+    }
 
     // Modifier Toggles for Custom Combinations
     @State private var isCmdActive = false
@@ -126,32 +137,106 @@ struct PadContentView: View {
                     }
                 }
 
-                // Standard Shortcut Dock
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(PadStandardShortcut.allCases) { shortcut in
-                            Button {
-                                triggerShortcut(shortcut)
-                            } label: {
-                                HStack(spacing: 6) {
-                                    Image(systemName: shortcut.symbol)
-                                        .font(.system(size: 11, weight: .semibold))
-                                    Text(shortcut.title)
-                                        .font(.system(size: 12, weight: .medium))
-                                    Text(shortcut.chordDescription)
-                                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                        .foregroundStyle(.secondary)
-                                }
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 7)
-                                .background(Color.white.opacity(0.08))
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(!connection.isAuthenticated)
+                // Dock Selector Tabs (Shortcuts / Macros / Control)
+                HStack(spacing: 6) {
+                    Picker("Mode Dock", selection: $activeDockTab) {
+                        ForEach(PadDockTab.allCases) { tab in
+                            Text(tab.rawValue).tag(tab)
                         }
                     }
-                    .padding(.horizontal, 2)
+                    .pickerStyle(.segmented)
+                    .frame(width: 230)
+
+                    Spacer()
+
+                    if activeDockTab == .macros {
+                        Button {
+                            editingMacro = nil
+                            showingMacroEditor = true
+                        } label: {
+                            Label("Tambah", systemImage: "plus")
+                                .font(.caption.weight(.medium))
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(.indigo)
+                        .controlSize(.small)
+                    }
+                }
+
+                if activeDockTab == .shortcuts {
+                    // Standard Shortcut Dock
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(PadStandardShortcut.allCases) { shortcut in
+                                Button {
+                                    triggerShortcut(shortcut)
+                                } label: {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: shortcut.symbol)
+                                            .font(.system(size: 11, weight: .semibold))
+                                        Text(shortcut.title)
+                                            .font(.system(size: 12, weight: .medium))
+                                        Text(shortcut.chordDescription)
+                                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 7)
+                                    .background(Color.white.opacity(0.08))
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(!connection.isAuthenticated)
+                            }
+                        }
+                        .padding(.horizontal, 2)
+                    }
+                } else if activeDockTab == .macros {
+                    // M4.1 Macro Presets Dock
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(macroStore.macros) { macro in
+                                Button {
+                                    connection.sendMacro(macroId: macro.id, steps: macro.steps)
+                                } label: {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: macro.icon)
+                                            .font(.system(size: 11, weight: .semibold))
+                                            .foregroundStyle(.indigo)
+                                        Text(macro.name)
+                                            .font(.system(size: 12, weight: .medium))
+                                        Text("(\(macro.steps.count))")
+                                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 7)
+                                    .background(Color.white.opacity(0.08))
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(!connection.isAuthenticated)
+                                .contextMenu {
+                                    Button {
+                                        editingMacro = macro
+                                        showingMacroEditor = true
+                                    } label: {
+                                        Label("Edit Macro", systemImage: "pencil")
+                                    }
+
+                                    Button(role: .destructive) {
+                                        macroStore.deleteMacro(id: macro.id)
+                                    } label: {
+                                        Label("Hapus Macro", systemImage: "trash")
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 2)
+                    }
+                } else {
+                    // M4.4 Custom Control Panel (Media + System)
+                    PadControlPanelView(connection: connection)
                 }
             }
             .padding(.vertical, 6)
@@ -232,6 +317,9 @@ struct PadContentView: View {
                     }
                 }
             }
+        }
+        .sheet(isPresented: $showingMacroEditor) {
+            PadMacroEditorSheet(existingMacro: editingMacro)
         }
     }
 
