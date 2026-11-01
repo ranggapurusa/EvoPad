@@ -3,32 +3,54 @@ import SwiftUI
 struct PadContentView: View {
     @StateObject private var connection = PadConnectionManager()
     @State private var inputFeedback = "Siap menerima gesture"
+    @State private var showingQRScanner = false
 
     var body: some View {
         VStack(spacing: 14) {
+            // Top Bar
             HStack(spacing: 10) {
-                Image(systemName: "cursorarrow.rays")
+                Image(systemName: "lock.shield.fill")
                     .font(.system(size: 21, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: 42, height: 42)
                     .background(Color.indigo, in: RoundedRectangle(cornerRadius: 12))
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("EvoPad")
-                        .font(.headline)
-                        .foregroundStyle(.white)
+                    HStack(spacing: 6) {
+                        Text("EvoPad")
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                        if connection.isAuthenticated {
+                            Text("TLS 1.3")
+                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 2)
+                                .background(Color.green.opacity(0.2))
+                                .foregroundStyle(.green)
+                                .clipShape(Capsule())
+                        }
+                    }
                     Text(connection.statusText)
                         .font(.caption)
-                        .foregroundStyle(connection.isConnected ? .green : .secondary)
+                        .foregroundStyle(connection.isAuthenticated ? .green : .secondary)
                         .lineLimit(1)
                 }
 
                 Spacer()
 
+                Button {
+                    showingQRScanner = true
+                } label: {
+                    Label("Pindai QR", systemImage: "qrcode.viewfinder")
+                        .font(.caption.weight(.medium))
+                }
+                .buttonStyle(.bordered)
+                .tint(.indigo)
+
                 Circle()
-                    .fill(connection.isConnected ? Color.green : Color.orange)
+                    .fill(connection.isAuthenticated ? Color.green : Color.orange)
                     .frame(width: 9, height: 9)
-                Text(connection.isConnected ? "CONNECTED" : "SEARCHING")
+                Text(connection.isAuthenticated ? "CONNECTED" : (connection.isConnected ? "AUTHENTICATING" : "SEARCHING"))
                     .font(.system(size: 10, weight: .bold, design: .rounded))
                     .tracking(0.7)
                     .foregroundStyle(.secondary)
@@ -97,5 +119,24 @@ struct PadContentView: View {
         .background(Color(red: 0.055, green: 0.06, blue: 0.08).ignoresSafeArea())
         .preferredColorScheme(.dark)
         .onAppear { connection.startDiscovery() }
+        .sheet(isPresented: $showingQRScanner) {
+            NavigationStack {
+                PadQRScannerView(onScan: { qrData in
+                    showingQRScanner = false
+                    connection.pairWithQR(qrData: qrData)
+                }, onCancel: {
+                    showingQRScanner = false
+                })
+                .navigationTitle("Pindai Kode QR Mac")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Batal") {
+                            showingQRScanner = false
+                        }
+                    }
+                }
+            }
+        }
     }
 }

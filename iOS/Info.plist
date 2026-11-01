@@ -12,6 +12,8 @@
     <key>LSRequiresIPhoneOS</key><true/>
     <key>NSLocalNetworkUsageDescription</key>
     <string>EvoPad mencari dan terhubung ke Mac Anda melalui jaringan Wi-Fi lokal untuk mengirim input trackpad dan gesture.</string>
+    <key>NSCameraUsageDescription</key>
+    <string>EvoPad memerlukan akses kamera untuk memindai kode QR pairing Mac.</string>
     <key>NSBonjourServices</key><array><string>_evopad._tcp</string></array>
     <key>UILaunchScreen</key><dict/>
     <key>UISupportedInterfaceOrientations~ipad</key>
