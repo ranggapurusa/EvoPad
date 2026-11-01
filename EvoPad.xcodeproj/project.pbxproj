@@ -23,6 +23,7 @@
 		A00000000000000000000042 /* PadSecurityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000040 /* PadSecurityManager.swift */; };
 		A00000000000000000000044 /* PadServerIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000043 /* PadServerIdentity.swift */; };
 		A00000000000000000000046 /* PadQRScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000045 /* PadQRScannerView.swift */; };
+		A00000000000000000000048 /* PadKeyboardController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000047 /* PadKeyboardController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -42,6 +43,7 @@
 		A00000000000000000000022 /* InputEventController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputEventController.swift; sourceTree = "<group>"; };
 		A00000000000000000000023 /* MacContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacContentView.swift; sourceTree = "<group>"; };
 		A00000000000000000000043 /* PadServerIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadServerIdentity.swift; sourceTree = "<group>"; };
+		A00000000000000000000047 /* PadKeyboardController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadKeyboardController.swift; sourceTree = "<group>"; };
 		A00000000000000000000024 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -113,6 +115,7 @@
 				A00000000000000000000022 /* InputEventController.swift */,
 				A00000000000000000000023 /* MacContentView.swift */,
 				A00000000000000000000043 /* PadServerIdentity.swift */,
+				A00000000000000000000047 /* PadKeyboardController.swift */,
 				A00000000000000000000024 /* Info.plist */,
 			);
 			path = macOS;
@@ -236,6 +239,7 @@
 				A0000000000000000000002D /* InputEventController.swift in Sources */,
 				A0000000000000000000002E /* MacContentView.swift in Sources */,
 				A00000000000000000000044 /* PadServerIdentity.swift in Sources */,
+				A00000000000000000000048 /* PadKeyboardController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

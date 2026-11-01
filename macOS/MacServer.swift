@@ -42,6 +42,7 @@ final class MacServer: ObservableObject {
     private let inputQueue = DispatchQueue(label: "id.evonex.evopad.mac-input", qos: .userInteractive)
     private let securityQueue = DispatchQueue(label: "id.evonex.evopad.mac-security", qos: .default)
     private let eventController = InputEventController()
+    private let keyboardController = PadKeyboardController()
     private var serverIdentity: PadServerIdentity?
 
     // Active one-time pairing QR secret
@@ -199,7 +200,21 @@ final class MacServer: ObservableObject {
     }
 
     func refreshPermission() {
-        hasAccessibilityPermission = eventController.hasAccessibilityPermission
+        hasAccessibilityPermission = eventController.hasAccessibilityPermission && keyboardController.hasAccessibilityPermission
+    }
+
+    /// Runs local testing of a shortcut on the Mac Helper side.
+    func testShortcut(_ shortcut: PadStandardShortcut) {
+        keyboardController.executeShortcut(
+            keyCode: shortcut.keyCode,
+            modifiers: shortcut.modifiers
+        ) { [weak self] success, message in
+            DispatchQueue.main.async {
+                self?.lastInputText = success
+                    ? "Tes shortcut \(shortcut.title) (\(shortcut.chordDescription)): sukses"
+                    : "Tes shortcut \(shortcut.title) gagal: \(message)"
+            }
+        }
     }
 
     func loadPairedDevicesList() {
@@ -440,9 +455,10 @@ final class MacServer: ObservableObject {
                 switch state {
                 case .failed, .cancelled:
                     self.eventController.releaseAllButtons()
+                    self.keyboardController.releaseAll()
                     DispatchQueue.main.async {
                         guard let connection, self.activeConnection === connection else { return }
-                        self.lastInputText = "Koneksi terputus — tombol mouse dilepas"
+                        self.lastInputText = "Koneksi terputus — tombol mouse & keyboard dilepas"
                         self.activeConnection = nil
                         self.activeSession = nil
                         self.connectedDevice = "Belum ada iPad"
@@ -492,6 +508,7 @@ final class MacServer: ObservableObject {
                     guard let self else { return }
                     if self.activeConnection === connection {
                         self.eventController.releaseAllButtons()
+                        self.keyboardController.releaseAll()
                         self.activeConnection = nil
                         self.activeSession = nil
                     }
@@ -829,12 +846,61 @@ final class MacServer: ObservableObject {
                 over: connection
             )
 
-        case .keyboardEvent, .textInput, .shortcutExecute, .mediaControl, .systemControl, .macroExecute:
+        case .shortcutExecute:
+            guard let payload = envelope.payload, let keyCode = payload.keyCode else {
+                sendEnvelopeV2(
+                    .error(requestId: envelope.requestId, code: .invalidPayload, message: "Payload shortcutExecute tidak lengkap (keyCode wajib diisi)"),
+                    over: connection
+                )
+                return
+            }
+
+            keyboardController.executeShortcut(
+                keyCode: keyCode,
+                modifiers: payload.modifiers ?? []
+            ) { [weak self, weak connection] accepted, message in
+                guard let self, let connection else { return }
+                self.sendEnvelopeV2(
+                    .ack(requestId: envelope.requestId, accepted: accepted, message: message),
+                    over: connection
+                )
+                DispatchQueue.main.async {
+                    self.lastInputText = accepted ? message : "Shortcut gagal: \(message)"
+                }
+            }
+
+        case .keyboardEvent:
+            guard let payload = envelope.payload,
+                  let keyCode = payload.keyCode,
+                  let phase = payload.keyPhase else {
+                sendEnvelopeV2(
+                    .error(requestId: envelope.requestId, code: .invalidPayload, message: "Payload keyboardEvent tidak lengkap (keyCode & keyPhase wajib)"),
+                    over: connection
+                )
+                return
+            }
+
+            keyboardController.handleKeyEvent(
+                keyCode: keyCode,
+                phase: phase,
+                modifiers: payload.modifiers
+            ) { [weak self, weak connection] accepted, message in
+                guard let self, let connection else { return }
+                self.sendEnvelopeV2(
+                    .ack(requestId: envelope.requestId, accepted: accepted, message: message),
+                    over: connection
+                )
+                DispatchQueue.main.async {
+                    self.lastInputText = accepted ? message : "Key event gagal: \(message)"
+                }
+            }
+
+        case .textInput, .mediaControl, .systemControl, .macroExecute:
             sendEnvelopeV2(
                 .error(
                     requestId: envelope.requestId,
                     code: .unsupportedAction,
-                    message: "Tipe \(envelope.type.rawValue) belum diaktifkan pada milestone M2"
+                    message: "Tipe \(envelope.type.rawValue) belum diaktifkan"
                 ),
                 over: connection
             )

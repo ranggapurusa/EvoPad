@@ -206,6 +206,26 @@ struct MacContentView: View {
                     }
                     .padding(.vertical, 4)
                 }
+
+                // M3.1 Shortcut Engine Testing
+                GroupBox("Tes Shortcut Mac (M3.1)") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Uji coba pengiriman event keyboard langsung pada Mac:")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 120))], spacing: 8) {
+                            ForEach(PadStandardShortcut.allCases) { shortcut in
+                                Button("\(shortcut.title) (\(shortcut.chordDescription))") {
+                                    server.testShortcut(shortcut)
+                                }
+                                .controlSize(.small)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 4)
+                }
             }
             .padding(24)
         }

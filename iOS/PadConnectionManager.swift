@@ -262,6 +262,24 @@ final class PadConnectionManager: ObservableObject {
         }
     }
 
+    func sendShortcut(_ shortcut: PadStandardShortcut) {
+        guard isAuthenticated else { return }
+        let envelope = PadEnvelopeV2.shortcut(shortcut)
+        sendV2(envelope)
+        DispatchQueue.main.async {
+            self.macFeedback = "Shortcut \(shortcut.title) (\(shortcut.chordDescription)) dikirim..."
+        }
+    }
+
+    func sendCustomShortcut(keyCode: UInt16, modifiers: [PadModifierFlagV2]) {
+        guard isAuthenticated else { return }
+        let envelope = PadEnvelopeV2.customShortcut(keyCode: keyCode, modifiers: modifiers)
+        sendV2(envelope)
+        DispatchQueue.main.async {
+            self.macFeedback = "Custom chord (key: \(keyCode)) dikirim..."
+        }
+    }
+
     private func sendEnvelopeDirect(_ envelope: PadEnvelopeV2, over connection: NWConnection) {
         guard var data = try? JSONEncoder().encode(envelope) else { return }
         data.append(0x0A)

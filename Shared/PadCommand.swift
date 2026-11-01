@@ -242,12 +242,105 @@ enum PadKeyPhaseV2: String, Codable {
     case press
 }
 
-enum PadModifierFlagV2: String, Codable {
+enum PadModifierFlagV2: String, Codable, Hashable {
     case cmd
     case shift
     case alt
     case ctrl
     case fn
+}
+
+enum PadStandardShortcut: String, Codable, Hashable, CaseIterable, Identifiable {
+    case copy = "copy"
+    case paste = "paste"
+    case cut = "cut"
+    case undo = "undo"
+    case redo = "redo"
+    case selectAll = "selectAll"
+    case commandTab = "commandTab"
+    case spotlight = "spotlight"
+    case missionControl = "missionControl"
+    case screenshot = "screenshot"
+    case lockScreen = "lockScreen"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .copy: return "Salin"
+        case .paste: return "Tempel"
+        case .cut: return "Potong"
+        case .undo: return "Undo"
+        case .redo: return "Redo"
+        case .selectAll: return "Pilih Semua"
+        case .commandTab: return "Cmd + Tab"
+        case .spotlight: return "Spotlight"
+        case .missionControl: return "Mission Control"
+        case .screenshot: return "Tangkapan Layar"
+        case .lockScreen: return "Kunci Layar"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .copy: return "doc.on.doc"
+        case .paste: return "doc.on.clipboard"
+        case .cut: return "scissors"
+        case .undo: return "arrow.uturn.backward"
+        case .redo: return "arrow.uturn.forward"
+        case .selectAll: return "selection.pin.in.out"
+        case .commandTab: return "app.badge"
+        case .spotlight: return "magnifyingglass"
+        case .missionControl: return "rectangle.3.group"
+        case .screenshot: return "camera.viewfinder"
+        case .lockScreen: return "lock.fill"
+        }
+    }
+
+    var keyCode: UInt16 {
+        switch self {
+        case .copy: return 8        // kVK_ANSI_C
+        case .paste: return 9       // kVK_ANSI_V
+        case .cut: return 7         // kVK_ANSI_X
+        case .undo: return 6        // kVK_ANSI_Z
+        case .redo: return 6        // kVK_ANSI_Z
+        case .selectAll: return 0   // kVK_ANSI_A
+        case .commandTab: return 48 // kVK_Tab
+        case .spotlight: return 49  // kVK_Space
+        case .missionControl: return 126 // kVK_UpArrow
+        case .screenshot: return 21 // kVK_ANSI_4
+        case .lockScreen: return 12 // kVK_ANSI_Q
+        }
+    }
+
+    var modifiers: [PadModifierFlagV2] {
+        switch self {
+        case .copy, .paste, .cut, .undo, .selectAll, .commandTab, .spotlight:
+            return [.cmd]
+        case .redo, .screenshot:
+            return [.cmd, .shift]
+        case .missionControl:
+            return [.ctrl, .fn]
+        case .lockScreen:
+            return [.cmd, .ctrl]
+        }
+    }
+
+    var chordDescription: String {
+        switch self {
+        case .copy: return "⌘C"
+        case .paste: return "⌘V"
+        case .cut: return "⌘X"
+        case .undo: return "⌘Z"
+        case .redo: return "⇧⌘Z"
+        case .selectAll: return "⌘A"
+        case .commandTab: return "⌘Tab"
+        case .spotlight: return "⌘Space"
+        case .missionControl: return "⌃↑"
+        case .screenshot: return "⇧⌘4"
+        case .lockScreen: return "⌃⌘Q"
+        }
+    }
 }
 
 struct PadMacroStepV2: Codable, Equatable {
@@ -353,6 +446,38 @@ struct PadEnvelopeV2: Codable, Equatable {
             requestId: requestId,
             type: .error,
             error: PadErrorPayloadV2(code: code, message: message, minVersion: minVersion, maxVersion: maxVersion)
+        )
+    }
+
+    static func shortcut(
+        _ shortcut: PadStandardShortcut,
+        requestId: String = UUID().uuidString
+    ) -> PadEnvelopeV2 {
+        PadEnvelopeV2(
+            requestId: requestId,
+            type: .shortcutExecute,
+            payload: PadPayloadV2(
+                keyCode: shortcut.keyCode,
+                keyPhase: .press,
+                modifiers: shortcut.modifiers,
+                systemAction: shortcut.rawValue
+            )
+        )
+    }
+
+    static func customShortcut(
+        keyCode: UInt16,
+        modifiers: [PadModifierFlagV2],
+        requestId: String = UUID().uuidString
+    ) -> PadEnvelopeV2 {
+        PadEnvelopeV2(
+            requestId: requestId,
+            type: .shortcutExecute,
+            payload: PadPayloadV2(
+                keyCode: keyCode,
+                keyPhase: .press,
+                modifiers: modifiers
+            )
         )
     }
 
