@@ -343,6 +343,50 @@ enum PadStandardShortcut: String, Codable, Hashable, CaseIterable, Identifiable 
     }
 }
 
+// MARK: - Standard macOS Virtual Key Codes (M3.2)
+
+enum PadVirtualKey: UInt16, CaseIterable {
+    // Alphanumeric - Letters
+    case a = 0, s = 1, d = 2, f = 3, h = 4, g = 5, z = 6, x = 7
+    case c = 8, v = 9, b = 11, q = 12, w = 13, e = 14, r = 15
+    case y = 16, t = 17, one = 18, two = 19, three = 20, four = 21
+    case six = 22, five = 23, equal = 24, nine = 25, seven = 26
+    case minus = 27, eight = 28, zero = 29, rightBracket = 30
+    case o = 31, u = 32, leftBracket = 33, i = 34, p = 35
+    case l = 37, j = 38, quote = 39, k = 40, semicolon = 41
+    case backslash = 42, comma = 43, slash = 44, n = 45, m = 46
+    case period = 47, grave = 50
+
+    // Whitespace & Control
+    case tab = 48
+    case space = 49
+    case delete = 51
+    case escape = 53
+    case returnKey = 36
+
+    // Navigation & Editing
+    case leftArrow = 123
+    case rightArrow = 124
+    case downArrow = 125
+    case upArrow = 126
+    case pageUp = 116
+    case pageDown = 121
+    case home = 115
+    case end = 119
+    case forwardDelete = 117
+
+    // Function Keys
+    case f1 = 122, f2 = 120, f3 = 99, f4 = 118, f5 = 96, f6 = 97
+    case f7 = 98, f8 = 100, f9 = 101, f10 = 109, f11 = 103, f12 = 111
+
+    // Modifiers (as standalone keys)
+    case command = 55
+    case shift = 56
+    case option = 58
+    case control = 59
+    case capsLock = 57
+}
+
 struct PadMacroStepV2: Codable, Equatable {
     let action: String
     let keyCode: UInt16?
@@ -476,6 +520,23 @@ struct PadEnvelopeV2: Codable, Equatable {
             payload: PadPayloadV2(
                 keyCode: keyCode,
                 keyPhase: .press,
+                modifiers: modifiers
+            )
+        )
+    }
+
+    static func keyEvent(
+        keyCode: UInt16,
+        phase: PadKeyPhaseV2,
+        modifiers: [PadModifierFlagV2]? = nil,
+        requestId: String = UUID().uuidString
+    ) -> PadEnvelopeV2 {
+        PadEnvelopeV2(
+            requestId: requestId,
+            type: .keyboardEvent,
+            payload: PadPayloadV2(
+                keyCode: keyCode,
+                keyPhase: phase,
                 modifiers: modifiers
             )
         )

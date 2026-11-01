@@ -280,6 +280,12 @@ final class PadConnectionManager: ObservableObject {
         }
     }
 
+    func sendKeyEvent(keyCode: UInt16, phase: PadKeyPhaseV2, modifiers: [PadModifierFlagV2]? = nil) {
+        guard isAuthenticated else { return }
+        let envelope = PadEnvelopeV2.keyEvent(keyCode: keyCode, phase: phase, modifiers: modifiers)
+        sendV2(envelope)
+    }
+
     private func sendEnvelopeDirect(_ envelope: PadEnvelopeV2, over connection: NWConnection) {
         guard var data = try? JSONEncoder().encode(envelope) else { return }
         data.append(0x0A)
@@ -428,10 +434,32 @@ final class PadConnectionManager: ObservableObject {
 
         } else if authMode == "reconnect" {
             let paired = PadKeychainStore.shared.loadPairedDevices()
-            guard let saved = paired.first(where: { $0.deviceId == serverDevId }),
+            let matchedDevice = paired.first(where: { $0.deviceId == serverDevId })
+                ?? (paired.count == 1 ? paired.first : nil)
+
+            guard let saved = matchedDevice,
                   let tokenData = Data(hexString: saved.pairingTokenHex),
                   let certFingerprintData = Data(hexString: saved.certFingerprintHex ?? "") else {
+                PadLog.network("iPad: reconnect rejected, Mac serverDeviceId=\(serverDevId) not recognized in Keychain")
+                DispatchQueue.main.async {
+                    self.statusText = "Mac tidak dikenali atau belum dipairing. Silakan pindai ulang QR Code."
+                }
                 return
+            }
+
+            // Sync serverDeviceId if it changed across Mac restarts
+            if saved.deviceId != serverDevId {
+                PadLog.network("iPad: updating saved Mac deviceId from \(saved.deviceId) to \(serverDevId)")
+                let updated = PadPairedDevice(
+                    deviceId: serverDevId,
+                    name: saved.name,
+                    pairingTokenHex: saved.pairingTokenHex,
+                    certFingerprintHex: saved.certFingerprintHex,
+                    pairedDate: saved.pairedDate,
+                    lastAuthenticatedDate: Date()
+                )
+                try? PadKeychainStore.shared.removeDevice(deviceId: saved.deviceId)
+                try? PadKeychainStore.shared.saveDevice(updated)
             }
 
             let transcript = PadCanonicalTranscript(

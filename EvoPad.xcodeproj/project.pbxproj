@@ -24,6 +24,7 @@
 		A00000000000000000000044 /* PadServerIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000043 /* PadServerIdentity.swift */; };
 		A00000000000000000000046 /* PadQRScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000045 /* PadQRScannerView.swift */; };
 		A00000000000000000000048 /* PadKeyboardController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000047 /* PadKeyboardController.swift */; };
+		A00000000000000000000050 /* PadVirtualKeyboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000049 /* PadVirtualKeyboardView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -44,6 +45,7 @@
 		A00000000000000000000023 /* MacContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacContentView.swift; sourceTree = "<group>"; };
 		A00000000000000000000043 /* PadServerIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadServerIdentity.swift; sourceTree = "<group>"; };
 		A00000000000000000000047 /* PadKeyboardController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadKeyboardController.swift; sourceTree = "<group>"; };
+		A00000000000000000000049 /* PadVirtualKeyboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadVirtualKeyboardView.swift; sourceTree = "<group>"; };
 		A00000000000000000000024 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -102,6 +104,7 @@
 				A0000000000000000000001D /* TrackpadSurface.swift */,
 				A0000000000000000000001E /* PadContentView.swift */,
 				A00000000000000000000045 /* PadQRScannerView.swift */,
+				A00000000000000000000049 /* PadVirtualKeyboardView.swift */,
 				A0000000000000000000001F /* Info.plist */,
 			);
 			path = iOS;
@@ -224,6 +227,7 @@
 				A00000000000000000000028 /* TrackpadSurface.swift in Sources */,
 				A00000000000000000000029 /* PadContentView.swift in Sources */,
 				A00000000000000000000046 /* PadQRScannerView.swift in Sources */,
+				A00000000000000000000050 /* PadVirtualKeyboardView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

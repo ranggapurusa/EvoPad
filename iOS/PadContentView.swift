@@ -4,6 +4,7 @@ struct PadContentView: View {
     @StateObject private var connection = PadConnectionManager()
     @State private var inputFeedback = "Siap menerima gesture"
     @State private var showingQRScanner = false
+    @State private var showingVirtualKeyboard = false
 
     // Modifier Toggles for Custom Combinations
     @State private var isCmdActive = false
@@ -61,6 +62,15 @@ struct PadContentView: View {
                 }
                 .buttonStyle(.bordered)
                 .tint(.indigo)
+
+                Button {
+                    showingVirtualKeyboard.toggle()
+                } label: {
+                    Image(systemName: showingVirtualKeyboard ? "keyboard.chevron.compact.down.fill" : "keyboard.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .buttonStyle(.bordered)
+                .tint(showingVirtualKeyboard ? .indigo : .secondary)
 
                 Circle()
                     .fill(connection.isAuthenticated ? Color.green : Color.orange)
@@ -186,8 +196,21 @@ struct PadContentView: View {
                 .tint(.white)
             }
             .controlSize(.large)
+
+            // M3.2 Virtual Keyboard Drawer
+            if showingVirtualKeyboard {
+                PadVirtualKeyboardView(
+                    connection: connection,
+                    isCmdActive: $isCmdActive,
+                    isOptActive: $isOptActive,
+                    isCtrlActive: $isCtrlActive,
+                    isShiftActive: $isShiftActive
+                )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
         .padding(16)
+        .animation(.easeInOut(duration: 0.22), value: showingVirtualKeyboard)
         .background(Color(red: 0.055, green: 0.06, blue: 0.08).ignoresSafeArea())
         .preferredColorScheme(.dark)
         .onAppear { connection.startDiscovery() }

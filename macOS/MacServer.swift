@@ -14,7 +14,15 @@ final class MacServer: ObservableObject {
     @Published private(set) var pointerInputHz = 0
 
     // M2 Security & Pairing States
-    @Published private(set) var serverDeviceId = UUID().uuidString
+    @Published private(set) var serverDeviceId: String = {
+        let key = "id.evonex.evopad.serverDeviceId.v2"
+        if let saved = UserDefaults.standard.string(forKey: key) {
+            return saved
+        }
+        let newId = UUID().uuidString
+        UserDefaults.standard.set(newId, forKey: key)
+        return newId
+    }()
     @Published private(set) var certFingerprintHex = ""
     @Published private(set) var currentQRData: PadPairingQRData?
     @Published private(set) var qrImage: NSImage?
