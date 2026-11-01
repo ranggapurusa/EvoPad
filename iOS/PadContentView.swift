@@ -3,17 +3,19 @@ import SwiftUI
 struct PadContentView: View {
     @StateObject private var connection = PadConnectionManager()
     @StateObject private var macroStore = PadMacroStore.shared
+    @StateObject private var workspaceStore = PadWorkspaceStore.shared
     @State private var inputFeedback = "Siap menerima gesture"
     @State private var showingQRScanner = false
     @State private var showingVirtualKeyboard = false
     @State private var showingMacroEditor = false
+    @State private var showingWorkspaceManager = false
     @State private var editingMacro: PadMacroDefinition?
-    @State private var activeDockTab: PadDockTab = .shortcuts
+    @State private var activeDockTab: PadDockTab = .control
 
     enum PadDockTab: String, CaseIterable, Identifiable {
+        case control = "Workspace"
         case shortcuts = "Shortcuts"
         case macros = "Macros"
-        case control = "Control"
         var id: String { rawValue }
     }
 
@@ -235,8 +237,15 @@ struct PadContentView: View {
                         .padding(.horizontal, 2)
                     }
                 } else {
-                    // M4.4 Custom Control Panel (Media + System)
-                    PadControlPanelView(connection: connection)
+                    // M5 Workspace & Custom Layout Control Surface
+                    PadControlPanelView(
+                        connection: connection,
+                        workspaceStore: workspaceStore,
+                        macroStore: macroStore,
+                        onActionFeedback: { message in
+                            inputFeedback = message
+                        }
+                    )
                 }
             }
             .padding(.vertical, 6)

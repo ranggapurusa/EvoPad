@@ -29,6 +29,10 @@
 		A00000000000000000000054 /* PadMacroExecutor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000053 /* PadMacroExecutor.swift */; };
 		A00000000000000000000056 /* PadMacroEditorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000055 /* PadMacroEditorSheet.swift */; };
 		A00000000000000000000058 /* PadControlPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000057 /* PadControlPanelView.swift */; };
+		A00000000000000000000060 /* PadWorkspaceModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000059 /* PadWorkspaceModels.swift */; };
+		A00000000000000000000062 /* PadWorkspaceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000061 /* PadWorkspaceStore.swift */; };
+		A00000000000000000000064 /* PadControlItemEditorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000063 /* PadControlItemEditorSheet.swift */; };
+		A00000000000000000000066 /* PadWorkspaceManagerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000065 /* PadWorkspaceManagerSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -54,6 +58,10 @@
 		A00000000000000000000053 /* PadMacroExecutor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadMacroExecutor.swift; sourceTree = "<group>"; };
 		A00000000000000000000055 /* PadMacroEditorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadMacroEditorSheet.swift; sourceTree = "<group>"; };
 		A00000000000000000000057 /* PadControlPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadControlPanelView.swift; sourceTree = "<group>"; };
+		A00000000000000000000059 /* PadWorkspaceModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadWorkspaceModels.swift; sourceTree = "<group>"; };
+		A00000000000000000000061 /* PadWorkspaceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadWorkspaceStore.swift; sourceTree = "<group>"; };
+		A00000000000000000000063 /* PadControlItemEditorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadControlItemEditorSheet.swift; sourceTree = "<group>"; };
+		A00000000000000000000065 /* PadWorkspaceManagerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadWorkspaceManagerSheet.swift; sourceTree = "<group>"; };
 		A00000000000000000000024 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -116,6 +124,10 @@
 				A00000000000000000000051 /* PadMacroStore.swift */,
 				A00000000000000000000055 /* PadMacroEditorSheet.swift */,
 				A00000000000000000000057 /* PadControlPanelView.swift */,
+				A00000000000000000000059 /* PadWorkspaceModels.swift */,
+				A00000000000000000000061 /* PadWorkspaceStore.swift */,
+				A00000000000000000000063 /* PadControlItemEditorSheet.swift */,
+				A00000000000000000000065 /* PadWorkspaceManagerSheet.swift */,
 				A0000000000000000000001F /* Info.plist */,
 			);
 			path = iOS;
@@ -243,6 +255,10 @@
 				A00000000000000000000052 /* PadMacroStore.swift in Sources */,
 				A00000000000000000000056 /* PadMacroEditorSheet.swift in Sources */,
 				A00000000000000000000058 /* PadControlPanelView.swift in Sources */,
+				A00000000000000000000060 /* PadWorkspaceModels.swift in Sources */,
+				A00000000000000000000062 /* PadWorkspaceStore.swift in Sources */,
+				A00000000000000000000064 /* PadControlItemEditorSheet.swift in Sources */,
+				A00000000000000000000066 /* PadWorkspaceManagerSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
