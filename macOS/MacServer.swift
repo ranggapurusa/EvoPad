@@ -42,7 +42,9 @@ final class MacServer: ObservableObject {
     private let receivedRate = PadRateCounter(label: "Mac pointer received")
     private var listener: NWListener?
 
-    // Connection Isolation: pending vs active
+    // Connection Isolation:
+    // - `activeConnection` and `activeSession` are owned exclusively by `inputQueue`.
+    // - `pendingConnections` is owned exclusively by `securityQueue`.
     private var activeConnection: NWConnection?
     private var activeSession: AuthenticatedSession?
     private var pendingConnections: [String: PendingConnection] = [:]
@@ -306,8 +308,9 @@ final class MacServer: ObservableObject {
         pendingPairingRequest = nil
 
         securityQueue.async { [weak self] in
-            guard let self,
-                  let pending = self.pendingConnections[approval.connectionId],
+            guard let self else { return }
+            dispatchPrecondition(condition: .onQueue(self.securityQueue))
+            guard let pending = self.pendingConnections[approval.connectionId],
                   let pairingId = pending.pairingId else {
                 return
             }
@@ -318,7 +321,7 @@ final class MacServer: ObservableObject {
                     .error(requestId: pairingId, code: .pairingRejected, message: "Pairing ditolak oleh pengguna Mac"),
                     over: pending.connection
                 )
-                self.cleanupPendingConnection(id: pending.id)
+                self.cleanupPendingConnectionOnSecurityQueue(id: pending.id)
                 return
             }
 
@@ -346,21 +349,28 @@ final class MacServer: ObservableObject {
     func revokeDevice(deviceId: String) {
         securityQueue.async { [weak self] in
             guard let self else { return }
+            dispatchPrecondition(condition: .onQueue(self.securityQueue))
             try? PadKeychainStore.shared.removeDevice(deviceId: deviceId)
             self.loadPairedDevicesList()
 
-            // If active connection matches revoked device, invalidate immediately
-            self.inputQueue.async {
+            // Cancel any pending connection from this device
+            let matchingPendingIds = self.pendingConnections.values
+                .filter { $0.clientDeviceId == deviceId }
+                .map { $0.id }
+            for pendingId in matchingPendingIds {
+                self.cleanupPendingConnectionOnSecurityQueue(id: pendingId)
+            }
+
+            // If active connection matches revoked device, invalidate on inputQueue
+            self.inputQueue.async { [weak self] in
+                guard let self else { return }
+                dispatchPrecondition(condition: .onQueue(self.inputQueue))
                 if let active = self.activeSession, active.clientDeviceId == deviceId {
                     PadLog.network("MacServer: active session device revoked, terminating connection")
-                    self.eventController.releaseAllButtons()
-                    self.activeConnection?.cancel()
-                    self.activeConnection = nil
-                    self.activeSession = nil
-                    DispatchQueue.main.async {
-                        self.connectedDevice = "Belum ada iPad"
-                        self.statusText = "Koneksi diputus karena izin perangkat dicabut"
-                    }
+                    self.invalidateActiveConnectionOnInputQueue(
+                        statusMessage: "Koneksi diputus karena izin perangkat dicabut",
+                        inputMessage: nil
+                    )
                 }
             }
         }
@@ -369,18 +379,22 @@ final class MacServer: ObservableObject {
     func revokeAllDevices() {
         securityQueue.async { [weak self] in
             guard let self else { return }
+            dispatchPrecondition(condition: .onQueue(self.securityQueue))
             try? PadKeychainStore.shared.removeAllDevices()
             self.loadPairedDevicesList()
 
-            self.inputQueue.async {
-                self.eventController.releaseAllButtons()
-                self.activeConnection?.cancel()
-                self.activeConnection = nil
-                self.activeSession = nil
-                DispatchQueue.main.async {
-                    self.connectedDevice = "Belum ada iPad"
-                    self.statusText = "Semua perangkat dicabut"
-                }
+            let allPendingIds = Array(self.pendingConnections.keys)
+            for pendingId in allPendingIds {
+                self.cleanupPendingConnectionOnSecurityQueue(id: pendingId)
+            }
+
+            self.inputQueue.async { [weak self] in
+                guard let self else { return }
+                dispatchPrecondition(condition: .onQueue(self.inputQueue))
+                self.invalidateActiveConnectionOnInputQueue(
+                    statusMessage: "Semua perangkat dicabut",
+                    inputMessage: nil
+                )
             }
         }
     }
@@ -390,6 +404,7 @@ final class MacServer: ObservableObject {
     private func handleNewConnection(_ connection: NWConnection) {
         securityQueue.async { [weak self, connection] in
             guard let self else { return }
+            dispatchPrecondition(condition: .onQueue(self.securityQueue))
 
             // Guard pending count limit
             if self.pendingConnections.count >= PadSecurityConstants.maxPendingConnections {
@@ -401,11 +416,13 @@ final class MacServer: ObservableObject {
             let connectionId = UUID().uuidString
             let pending = PendingConnection(id: connectionId, connection: connection)
 
-            // Arm 10s handshake timeout
+            // Arm 10s handshake timeout on securityQueue
             let timeoutItem = DispatchWorkItem { [weak self, weak connection] in
+                guard let self else { return }
+                dispatchPrecondition(condition: .onQueue(self.securityQueue))
                 PadLog.network("MacServer: pending handshake timed out for \(connectionId)")
                 connection?.cancel()
-                self?.cleanupPendingConnection(id: connectionId)
+                self.cleanupPendingConnectionOnSecurityQueue(id: connectionId)
             }
             pending.timeoutWorkItem = timeoutItem
             self.securityQueue.asyncAfter(deadline: .now() + PadSecurityConstants.handshakeTimeoutSeconds, execute: timeoutItem)
@@ -428,55 +445,103 @@ final class MacServer: ObservableObject {
 
     private func cleanupPendingConnection(id: String) {
         securityQueue.async { [weak self] in
-            guard let self, let pending = self.pendingConnections.removeValue(forKey: id) else { return }
-            pending.timeoutWorkItem?.cancel()
-            pending.connection.cancel()
+            guard let self else { return }
+            self.cleanupPendingConnectionOnSecurityQueue(id: id)
+        }
+    }
+
+    private func cleanupPendingConnectionOnSecurityQueue(id: String) {
+        dispatchPrecondition(condition: .onQueue(securityQueue))
+        guard let pending = pendingConnections.removeValue(forKey: id) else { return }
+        pending.timeoutWorkItem?.cancel()
+        pending.connection.cancel()
+        DispatchQueue.main.async { [weak self] in
+            if self?.pendingPairingRequest?.connectionId == id {
+                self?.pendingPairingRequest = nil
+            }
         }
     }
 
     private func promoteToActiveConnection(pending: PendingConnection) {
+        dispatchPrecondition(condition: .onQueue(securityQueue))
         pending.timeoutWorkItem?.cancel()
         pendingConnections.removeValue(forKey: pending.id)
 
+        let clientDeviceId = pending.clientDeviceId ?? "Unknown"
+        let clientName = pending.clientName ?? "iPad"
+        let promotedConnection = pending.connection
+
         inputQueue.async { [weak self] in
             guard let self else { return }
+            dispatchPrecondition(condition: .onQueue(self.inputQueue))
 
-            // Safe replacement of active connection
+            // Safe replacement of previous active connection on inputQueue
+            if let oldConnection = self.activeConnection, oldConnection !== promotedConnection {
+                oldConnection.stateUpdateHandler = nil
+                oldConnection.cancel()
+            }
             self.eventController.releaseAllButtons()
-            self.activeConnection?.cancel()
+            self.keyboardController.releaseAll()
+            self.macroExecutor.cancelCurrentMacro()
 
             let session = AuthenticatedSession(
-                clientDeviceId: pending.clientDeviceId ?? "Unknown",
-                clientName: pending.clientName ?? "iPad",
+                clientDeviceId: clientDeviceId,
+                clientName: clientName,
                 authenticatedAt: Date(),
-                connection: pending.connection
+                connection: promotedConnection
             )
             self.activeSession = session
-            self.activeConnection = pending.connection
+            self.activeConnection = promotedConnection
 
-            DispatchQueue.main.async {
-                self.connectedDevice = "\(session.clientName) (Terautentikasi)"
-                self.statusText = "Terhubung (TLS 1.3 Terautentikasi)"
+            DispatchQueue.main.async { [weak self] in
+                self?.connectedDevice = "\(session.clientName) (Terautentikasi)"
+                self?.statusText = "Terhubung (TLS 1.3 Terautentikasi)"
             }
 
-            pending.connection.stateUpdateHandler = { [weak self, weak connection = pending.connection] state in
+            // Since `promotedConnection` was started on `inputQueue`, its stateUpdateHandler
+            // runs on `inputQueue`. Validate queue ownership and mutate `activeConnection`
+            // / `activeSession` strictly on `inputQueue`.
+            promotedConnection.stateUpdateHandler = { [weak self, weak connection = promotedConnection] state in
                 guard let self else { return }
+                dispatchPrecondition(condition: .onQueue(self.inputQueue))
                 switch state {
                 case .failed, .cancelled:
-                    self.eventController.releaseAllButtons()
-                    self.keyboardController.releaseAll()
-                    self.macroExecutor.cancelCurrentMacro()
-                    DispatchQueue.main.async {
-                        guard let connection, self.activeConnection === connection else { return }
-                        self.lastInputText = "Koneksi terputus — tombol mouse & keyboard dilepas"
-                        self.activeConnection = nil
-                        self.activeSession = nil
-                        self.connectedDevice = "Belum ada iPad"
-                        self.statusText = self.isListening ? "Siap (TLS 1.3 Aktif) — menunggu iPad" : "Koneksi terputus"
-                    }
+                    guard let connection, self.activeConnection === connection else { return }
+                    self.invalidateActiveConnectionOnInputQueue(
+                        statusMessage: nil,
+                        inputMessage: "Koneksi terputus — tombol mouse & keyboard dilepas"
+                    )
                 default:
                     break
                 }
+            }
+        }
+    }
+
+    private func invalidateActiveConnectionOnInputQueue(
+        statusMessage: String?,
+        inputMessage: String?
+    ) {
+        dispatchPrecondition(condition: .onQueue(inputQueue))
+        let connectionToCancel = activeConnection
+        activeConnection = nil
+        activeSession = nil
+
+        eventController.releaseAllButtons()
+        keyboardController.releaseAll()
+        macroExecutor.cancelCurrentMacro()
+        connectionToCancel?.cancel()
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            if let inputMessage {
+                self.lastInputText = inputMessage
+            }
+            self.connectedDevice = "Belum ada iPad"
+            if let statusMessage {
+                self.statusText = statusMessage
+            } else {
+                self.statusText = self.isListening ? "Siap (TLS 1.3 Aktif) — menunggu iPad" : "Koneksi terputus"
             }
         }
     }
@@ -514,15 +579,12 @@ final class MacServer: ObservableObject {
             }
 
             if error != nil || isComplete {
-                self.inputQueue.async { [weak self, weak connection] in
-                    guard let self else { return }
-                    if self.activeConnection === connection {
-                        self.eventController.releaseAllButtons()
-                        self.keyboardController.releaseAll()
-                        self.macroExecutor.cancelCurrentMacro()
-                        self.activeConnection = nil
-                        self.activeSession = nil
-                    }
+                dispatchPrecondition(condition: .onQueue(self.inputQueue))
+                if self.activeConnection === connection {
+                    self.invalidateActiveConnectionOnInputQueue(
+                        statusMessage: nil,
+                        inputMessage: "Koneksi terputus — tombol mouse & keyboard dilepas"
+                    )
                 }
                 self.cleanupPendingConnection(id: connectionId)
                 connection.cancel()
@@ -571,6 +633,7 @@ final class MacServer: ObservableObject {
     }
 
     private func isConnectionActiveAndAuthorized(_ connection: NWConnection) -> Bool {
+        dispatchPrecondition(condition: .onQueue(inputQueue))
         guard let session = activeSession,
               !session.isExpired,
               activeConnection === connection else {
@@ -583,7 +646,9 @@ final class MacServer: ObservableObject {
 
     private func handleSecurityHandshake(_ envelope: PadEnvelopeV2, connection: NWConnection, connectionId: String) {
         securityQueue.async { [weak self] in
-            guard let self, let pending = self.pendingConnections[connectionId] else { return }
+            guard let self else { return }
+            dispatchPrecondition(condition: .onQueue(self.securityQueue))
+            guard let pending = self.pendingConnections[connectionId] else { return }
 
             switch envelope.type {
             case .hello:
@@ -639,7 +704,7 @@ final class MacServer: ObservableObject {
                           let secretData = Data(hexString: activeSecretHex) else {
                         PadLog.network("MacServer: pairing attempt with expired or missing QR secret")
                         self.sendEnvelopeV2(.error(requestId: envelope.requestId, code: .pairingExpired, message: "Kode QR pairing sudah kedaluwarsa"), over: connection)
-                        self.cleanupPendingConnection(id: connectionId)
+                        self.cleanupPendingConnectionOnSecurityQueue(id: connectionId)
                         return
                     }
 
@@ -663,7 +728,7 @@ final class MacServer: ObservableObject {
                     guard transcript.verifyHMAC(keyData: secretData, expectedHmacHex: clientHmac) else {
                         PadLog.network("MacServer: client pairing proof HMAC verification failed")
                         self.sendEnvelopeV2(.error(requestId: envelope.requestId, code: .authFailed, message: "HMAC pairing client tidak valid"), over: connection)
-                        self.cleanupPendingConnection(id: connectionId)
+                        self.cleanupPendingConnectionOnSecurityQueue(id: connectionId)
                         return
                     }
 
@@ -684,7 +749,7 @@ final class MacServer: ObservableObject {
                           let tokenData = Data(hexString: matchedDevice.pairingTokenHex) else {
                         PadLog.network("MacServer: reconnect failed, device not paired: \(clientDevId)")
                         self.sendEnvelopeV2(.error(requestId: envelope.requestId, code: .unauthenticated, message: "Perangkat belum terdaftar"), over: connection)
-                        self.cleanupPendingConnection(id: connectionId)
+                        self.cleanupPendingConnectionOnSecurityQueue(id: connectionId)
                         return
                     }
 
@@ -705,7 +770,7 @@ final class MacServer: ObservableObject {
                     guard transcript.verifyHMAC(keyData: tokenData, expectedHmacHex: clientHmac) else {
                         PadLog.network("MacServer: client reconnect HMAC verification failed")
                         self.sendEnvelopeV2(.error(requestId: envelope.requestId, code: .authFailed, message: "HMAC reconnect tidak valid"), over: connection)
-                        self.cleanupPendingConnection(id: connectionId)
+                        self.cleanupPendingConnectionOnSecurityQueue(id: connectionId)
                         return
                     }
 
@@ -769,7 +834,7 @@ final class MacServer: ObservableObject {
                 guard commitTranscript.verifyHMAC(keyData: tokenData, expectedHmacHex: commitHmac) else {
                     PadLog.network("MacServer: pairingCommit HMAC verification failed")
                     self.sendEnvelopeV2(.error(requestId: envelope.requestId, code: .authFailed, message: "HMAC pairing commit tidak valid"), over: connection)
-                    self.cleanupPendingConnection(id: connectionId)
+                    self.cleanupPendingConnectionOnSecurityQueue(id: connectionId)
                     return
                 }
 
@@ -993,12 +1058,15 @@ final class MacServer: ObservableObject {
                 return
             }
 
-            let ok = self.macroExecutor.typeTextExternal(text)
-            if ok {
-                sendEnvelopeV2(.ack(requestId: envelope.requestId, accepted: true, message: "Teks diketik"), over: connection)
-                DispatchQueue.main.async { self.lastInputText = "Teks diketik: \(text)" }
-            } else {
-                sendEnvelopeV2(.error(requestId: envelope.requestId, code: .permissionDenied, message: "Gagal mengetik teks"), over: connection)
+            macroExecutor.executeTextInput(text) { [weak self, weak connection] ok, errCode, msg in
+                guard let self, let connection else { return }
+                if ok {
+                    self.sendEnvelopeV2(.ack(requestId: envelope.requestId, accepted: true, message: msg), over: connection)
+                    DispatchQueue.main.async { self.lastInputText = "Teks diketik: \(text)" }
+                } else {
+                    self.sendEnvelopeV2(.error(requestId: envelope.requestId, code: errCode ?? .permissionDenied, message: msg), over: connection)
+                    DispatchQueue.main.async { self.lastInputText = "Teks gagal: \(msg)" }
+                }
             }
 
         default:
@@ -1031,8 +1099,7 @@ final class MacServer: ObservableObject {
     }
 
     private func sendEnvelopeV2(_ envelope: PadEnvelopeV2, over connection: NWConnection) {
-        guard var data = try? JSONEncoder().encode(envelope) else { return }
-        data.append(0x0A)
+        guard let data = PadFrameCodec.encodeV2Envelope(envelope) else { return }
         connection.send(
             content: data,
             contentContext: .defaultMessage,
@@ -1046,8 +1113,7 @@ final class MacServer: ObservableObject {
     }
 
     private func sendGestureAcknowledgement(_ acknowledgement: PadAcknowledgement, over connection: NWConnection) {
-        guard var data = try? JSONEncoder().encode(acknowledgement) else { return }
-        data.append(0x0A)
+        guard let data = PadFrameCodec.encodeV1Ack(acknowledgement) else { return }
         connection.send(
             content: data,
             contentContext: .defaultMessage,

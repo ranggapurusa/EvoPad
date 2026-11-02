@@ -9,7 +9,20 @@ final class PadMacroExecutor {
     private let keyboardController: PadKeyboardController
 
     private var activeMacroId: String?
-    private var isCancelled = false
+    private let cancellationLock = NSLock()
+    private var _isCancelled = false
+    private var isCancelled: Bool {
+        get {
+            cancellationLock.lock()
+            defer { cancellationLock.unlock() }
+            return _isCancelled
+        }
+        set {
+            cancellationLock.lock()
+            _isCancelled = newValue
+            cancellationLock.unlock()
+        }
+    }
     private var macroTimeoutWorkItem: DispatchWorkItem?
 
     private let maxMacroDurationSeconds: TimeInterval = 15.0
@@ -58,9 +71,7 @@ final class PadMacroExecutor {
                 if self.isCancelled {
                     self.cleanupWatchdog()
                     self.keyboardController.releaseAll()
-                    DispatchQueue.main.async {
-                        completion(false, .macroCancelled, "Macro \(macroId) dibatalkan")
-                    }
+                    completion(false, .macroCancelled, "Macro \(macroId) dibatalkan")
                     return
                 }
 
@@ -68,7 +79,9 @@ final class PadMacroExecutor {
                 if !stepSuccess {
                     self.cleanupWatchdog()
                     self.keyboardController.releaseAll()
-                    DispatchQueue.main.async {
+                    if self.isCancelled {
+                        completion(false, .macroCancelled, "Macro \(macroId) dibatalkan")
+                    } else {
                         completion(false, .invalidPayload, "Gagal menjalankan langkah ke-\(index + 1) [\(step.action)]")
                     }
                     return
@@ -79,20 +92,20 @@ final class PadMacroExecutor {
             self.activeMacroId = nil
 
             PadLog.keyboard("Mac: macro \(macroId) completed successfully")
-            DispatchQueue.main.async {
-                completion(true, nil, "Macro \(macroId) selesai dieksekusi")
-            }
+            completion(true, nil, "Macro \(macroId) selesai dieksekusi")
         }
     }
 
-    /// Cancels currently executing macro and releases any held keys.
+    /// Cancels currently executing macro or text input immediately and releases any held keys.
     func cancelCurrentMacro() {
+        isCancelled = true
         macroQueue.async { [weak self] in
             self?.cancelCurrentMacroInternal()
         }
     }
 
     private func cancelCurrentMacroInternal() {
+        dispatchPrecondition(condition: .onQueue(macroQueue))
         isCancelled = true
         cleanupWatchdog()
         activeMacroId = nil
@@ -134,10 +147,19 @@ final class PadMacroExecutor {
 
         case "delay":
             let rawDelay = step.delayMs ?? 100
-            // Clamp safe delay between 5 ms and 5,000 ms per step
-            let safeDelay = max(5, min(5000, rawDelay))
-            usleep(UInt32(safeDelay * 1000))
-            return true
+            // Clamp safe delay between 5 ms and 5,000 ms per step, sleeping in <=20 ms slices
+            // so `cancelCurrentMacro()` / disconnect aborts immediately without blocking `macroQueue`.
+            var remainingMs = max(5, min(5000, rawDelay))
+            let sliceMs = 20
+            while remainingMs > 0 {
+                if isCancelled {
+                    return false
+                }
+                let currentSlice = min(sliceMs, remainingMs)
+                usleep(UInt32(currentSlice * 1000))
+                remainingMs -= currentSlice
+            }
+            return !isCancelled
 
         case "launchapp":
             guard let target = step.text, !target.isEmpty else { return false }
@@ -195,15 +217,53 @@ final class PadMacroExecutor {
         return launched
     }
 
-    /// Types unicode text via native CGEvent.
-    func typeTextExternal(_ text: String) -> Bool {
-        return typeText(text)
+    /// Asynchronously types unicode text on `macroQueue` so `inputQueue` (60 Hz pointer stream) is never blocked.
+    func executeTextInput(
+        _ text: String,
+        completion: @escaping (Bool, PadErrorCodeV2?, String) -> Void
+    ) {
+        guard !text.isEmpty else {
+            completion(false, .invalidPayload, "Teks kosong")
+            return
+        }
+
+        // Clear cancellation flag before queuing so sequential text inputs execute in order,
+        // while an immediate `cancelCurrentMacro()` on disconnect can still abort in-flight typing.
+        isCancelled = false
+
+        macroQueue.async { [weak self] in
+            guard let self else { return }
+            dispatchPrecondition(condition: .onQueue(self.macroQueue))
+
+            if self.isCancelled {
+                self.keyboardController.releaseAll()
+                completion(false, .macroCancelled, "Input teks dibatalkan")
+                return
+            }
+
+            let ok = self.typeText(text)
+            if self.isCancelled {
+                self.keyboardController.releaseAll()
+                completion(false, .macroCancelled, "Input teks dibatalkan saat berjalan")
+                return
+            }
+
+            if ok {
+                completion(true, nil, "Teks diketik")
+            } else {
+                completion(false, .permissionDenied, "Gagal mengetik teks")
+            }
+        }
     }
 
     private func typeText(_ text: String) -> Bool {
+        dispatchPrecondition(condition: .onQueue(macroQueue))
         guard let source = CGEventSource(stateID: .hidSystemState) else { return false }
 
         for scalar in text.utf16 {
+            if isCancelled {
+                return false
+            }
             var charCode = scalar
             guard let down = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true),
                   let up = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false) else {
@@ -215,6 +275,9 @@ final class PadMacroExecutor {
             down.post(tap: .cghidEventTap)
             usleep(6_000)
             up.post(tap: .cghidEventTap)
+            if isCancelled {
+                return false
+            }
             usleep(6_000)
         }
         return true

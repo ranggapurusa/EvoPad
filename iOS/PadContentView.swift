@@ -8,7 +8,6 @@ struct PadContentView: View {
     @State private var showingQRScanner = false
     @State private var showingVirtualKeyboard = false
     @State private var showingMacroEditor = false
-    @State private var showingWorkspaceManager = false
     @State private var editingMacro: PadMacroDefinition?
     @State private var activeDockTab: PadDockTab = .control
 

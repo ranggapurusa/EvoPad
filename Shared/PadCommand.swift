@@ -773,6 +773,43 @@ enum PadFrameCodec {
         case frameTooLarge(Int)
     }
 
+    private static let codecLock = NSLock()
+    private static let sharedEncoder = JSONEncoder()
+    private static let sharedDecoder = JSONDecoder()
+    private static let v2ShortVersionKey = Data("\"v\"".utf8)
+    private static let v2LongVersionKey = Data("\"protocolVersion\"".utf8)
+    private static let v1GestureAckMarker = Data("\"gestureAck\"".utf8)
+
+    /// Thread-safe reusable JSON encoding for V1 `PadCommand` with trailing newline (`0x0A`).
+    static func encodeV1Command(_ command: PadCommand) -> Data? {
+        codecLock.lock()
+        defer { codecLock.unlock() }
+        guard var data = try? sharedEncoder.encode(command) else { return nil }
+        data.append(0x0A)
+        return data
+    }
+
+    /// Thread-safe reusable JSON encoding for V2 `PadEnvelopeV2` with trailing newline (`0x0A`).
+    static func encodeV2Envelope(_ envelope: PadEnvelopeV2) -> Data? {
+        codecLock.lock()
+        defer { codecLock.unlock() }
+        guard var data = try? sharedEncoder.encode(envelope),
+              data.count <= PadProtocol.maximumFrameBytes else {
+            return nil
+        }
+        data.append(0x0A)
+        return data
+    }
+
+    /// Thread-safe reusable JSON encoding for V1 `PadAcknowledgement` with trailing newline (`0x0A`).
+    static func encodeV1Ack(_ acknowledgement: PadAcknowledgement) -> Data? {
+        codecLock.lock()
+        defer { codecLock.unlock() }
+        guard var data = try? sharedEncoder.encode(acknowledgement) else { return nil }
+        data.append(0x0A)
+        return data
+    }
+
     static func popNextFrame(from buffer: inout Data, maxBytes: Int = PadProtocol.maximumFrameBytes) -> LineExtractionResult {
         if let newline = buffer.firstIndex(of: 0x0A) {
             let length = buffer.distance(from: buffer.startIndex, to: newline)
@@ -797,14 +834,25 @@ enum PadFrameCodec {
             return .failure(.frameTooLarge(line.count))
         }
 
-        let decoder = JSONDecoder()
+        let mightBeV2 = line.range(of: v2ShortVersionKey) != nil || line.range(of: v2LongVersionKey) != nil
 
-        if let probe = try? decoder.decode(PadVersionProbe.self, from: line),
+        codecLock.lock()
+        defer { codecLock.unlock() }
+
+        // Fast-path for 60 Hz V1 PadCommand (`move`, `scroll`, `click`, `buttonDown`, `buttonUp`, `gesture`)
+        if !mightBeV2 {
+            if let v1 = try? sharedDecoder.decode(PadCommand.self, from: line) {
+                return .success(.v1Command(v1))
+            }
+            return .failure(.malformedJSON)
+        }
+
+        if let probe = try? sharedDecoder.decode(PadVersionProbe.self, from: line),
            let version = probe.resolvedVersion {
             guard version == PadProtocol.currentVersion else {
                 return .failure(.unsupportedVersion(version: version, requestId: probe.resolvedRequestId))
             }
-            guard let envelope = try? decoder.decode(PadEnvelopeV2.self, from: line) else {
+            guard let envelope = try? sharedDecoder.decode(PadEnvelopeV2.self, from: line) else {
                 return .failure(.malformedJSON)
             }
             if let validationError = envelope.validatePayload() {
@@ -813,7 +861,7 @@ enum PadFrameCodec {
             return .success(.v2Envelope(envelope))
         }
 
-        if let v1 = try? decoder.decode(PadCommand.self, from: line) {
+        if let v1 = try? sharedDecoder.decode(PadCommand.self, from: line) {
             return .success(.v1Command(v1))
         }
 
@@ -826,14 +874,23 @@ enum PadFrameCodec {
             return .failure(.frameTooLarge(line.count))
         }
 
-        let decoder = JSONDecoder()
+        let mightBeV2 = line.range(of: v2ShortVersionKey) != nil || line.range(of: v2LongVersionKey) != nil
 
-        if let probe = try? decoder.decode(PadVersionProbe.self, from: line),
+        codecLock.lock()
+        defer { codecLock.unlock() }
+
+        if !mightBeV2 && line.range(of: v1GestureAckMarker) != nil {
+            if let v1Ack = try? sharedDecoder.decode(PadAcknowledgement.self, from: line) {
+                return .success(.v1Ack(v1Ack))
+            }
+        }
+
+        if let probe = try? sharedDecoder.decode(PadVersionProbe.self, from: line),
            let version = probe.resolvedVersion {
             guard version == PadProtocol.currentVersion else {
                 return .failure(.unsupportedVersion(version: version, requestId: probe.resolvedRequestId))
             }
-            guard let envelope = try? decoder.decode(PadEnvelopeV2.self, from: line) else {
+            guard let envelope = try? sharedDecoder.decode(PadEnvelopeV2.self, from: line) else {
                 return .failure(.malformedJSON)
             }
             if let validationError = envelope.validatePayload() {
@@ -842,7 +899,7 @@ enum PadFrameCodec {
             return .success(.v2Envelope(envelope))
         }
 
-        if let v1Ack = try? decoder.decode(PadAcknowledgement.self, from: line) {
+        if let v1Ack = try? sharedDecoder.decode(PadAcknowledgement.self, from: line) {
             return .success(.v1Ack(v1Ack))
         }
 

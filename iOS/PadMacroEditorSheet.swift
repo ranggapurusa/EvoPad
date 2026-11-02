@@ -64,7 +64,7 @@ struct PadMacroEditorSheet: View {
                     }
                 }
 
-                Section("Daftar Langkah (Maksimal 16)") {
+                Section("Daftar Langkah (Maksimal \(PadProtocol.maximumMacroSteps))") {
                     if steps.isEmpty {
                         Text("Belum ada langkah. Tambahkan di bawah.")
                             .font(.caption)

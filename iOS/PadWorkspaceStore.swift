@@ -119,6 +119,15 @@ final class PadWorkspaceStore: ObservableObject {
     private let storageKey: String
     private let activeWorkspaceKey: String
     private let fileURL: URL?
+    private let persistenceQueue = DispatchQueue(label: "id.evonex.evopad.workspace-persistence", qos: .utility)
+    private var pendingSaveWorkItem: DispatchWorkItem?
+    private static let sharedBundleEncoder: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
+    }()
+    private static let encoderLock = NSLock()
 
     init(
         userDefaults: UserDefaults = .standard,
@@ -202,7 +211,36 @@ final class PadWorkspaceStore: ObservableObject {
         }
     }
 
-    func saveWorkspaces() {
+    func saveWorkspaces(debounced: Bool = false) {
+        let snapshotWorkspaces = workspaces
+        let snapshotActiveId = activeWorkspaceId
+        userDefaults.set(snapshotActiveId, forKey: activeWorkspaceKey)
+
+        pendingSaveWorkItem?.cancel()
+        pendingSaveWorkItem = nil
+
+        if debounced {
+            let work = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                self.writeSnapshotToStorage(workspaces: snapshotWorkspaces, activeWorkspaceId: snapshotActiveId)
+            }
+            pendingSaveWorkItem = work
+            persistenceQueue.asyncAfter(deadline: .now() + 0.15, execute: work)
+        } else {
+            persistenceQueue.sync {
+                self.writeSnapshotToStorage(workspaces: snapshotWorkspaces, activeWorkspaceId: snapshotActiveId)
+            }
+        }
+    }
+
+    /// Ensures any coalesced background save is flushed immediately to disk and `UserDefaults`.
+    func flushPendingSave() {
+        if pendingSaveWorkItem != nil {
+            saveWorkspaces(debounced: false)
+        }
+    }
+
+    private func writeSnapshotToStorage(workspaces: [Workspace], activeWorkspaceId: String) {
         let bundle = WorkspaceExportBundle(
             schemaVersion: PadWorkspaceSchema.currentVersion,
             exportedAt: Date(),
@@ -210,11 +248,11 @@ final class PadWorkspaceStore: ObservableObject {
             activeWorkspaceId: activeWorkspaceId,
             workspaces: workspaces
         )
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        encoder.dateEncodingStrategy = .iso8601
+        Self.encoderLock.lock()
+        let data = try? Self.sharedBundleEncoder.encode(bundle)
+        Self.encoderLock.unlock()
 
-        guard let data = try? encoder.encode(bundle) else { return }
+        guard let data else { return }
         userDefaults.set(data, forKey: storageKey)
         userDefaults.set(activeWorkspaceId, forKey: activeWorkspaceKey)
         if let url = fileURL {
@@ -479,7 +517,7 @@ final class PadWorkspaceStore: ObservableObject {
             layout.items[sourceIdx] = movedSource
             workspaces[wsIdx].layout = layout
             workspaces[wsIdx].updatedAt = Date()
-            saveWorkspaces()
+            saveWorkspaces(debounced: true)
             return true
         }
 
@@ -504,7 +542,7 @@ final class PadWorkspaceStore: ObservableObject {
             if testLayout.validateNoCollisions() {
                 workspaces[wsIdx].layout = testLayout
                 workspaces[wsIdx].updatedAt = Date()
-                saveWorkspaces()
+                saveWorkspaces(debounced: true)
                 return true
             }
         }

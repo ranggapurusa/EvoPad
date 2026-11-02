@@ -113,10 +113,6 @@ final class PadServerIdentity {
     static func createECDSASignature(privateKey: SecKey, data: Data) throws -> (signature: Data, algorithm: SecKeyAlgorithm) {
         let digest = Data(SHA256.hash(data: data))
 
-        if let attrs = SecKeyCopyAttributes(privateKey) as? [String: Any] {
-            print("DEBUG [createECDSASignature] PrivateKey attributes: \(attrs)")
-        }
-
         let candidateAlgorithms: [(SecKeyAlgorithm, Data, String)] = [
             (.ecdsaSignatureDigestX962SHA256, digest, "ecdsaSignatureDigestX962SHA256"),
             (.ecdsaSignatureDigestX962, digest, "ecdsaSignatureDigestX962"),
@@ -125,8 +121,9 @@ final class PadServerIdentity {
 
         var lastError: Error?
         for (algorithm, payload, name) in candidateAlgorithms {
-            let isSupported = SecKeyIsAlgorithmSupported(privateKey, .sign, algorithm)
-            print("DEBUG [createECDSASignature] SecKeyIsAlgorithmSupported(\(name)): \(isSupported)")
+            guard SecKeyIsAlgorithmSupported(privateKey, .sign, algorithm) else {
+                continue
+            }
 
             var signError: Unmanaged<CFError>?
             if let signature = SecKeyCreateSignature(
@@ -135,10 +132,9 @@ final class PadServerIdentity {
                 payload as CFData,
                 &signError
             ) as Data? {
-                print("DEBUG [createECDSASignature] SecKeyCreateSignature SUCCESS with \(name)!")
                 return (signature, algorithm)
             } else if let err = signError?.takeRetainedValue() {
-                print("DEBUG [createECDSASignature] SecKeyCreateSignature FAILED with \(name): \(err)")
+                PadLog.network("PadServerIdentity: SecKeyCreateSignature failed with \(name): \(err.localizedDescription)")
                 lastError = err as Error
             }
         }
@@ -264,8 +260,8 @@ final class PadServerIdentity {
             kSecAttrLabel as String: identityLabel
         ]
         let addStatus = SecItemAdd(certAddQuery as CFDictionary, nil)
-        print("DEBUG [generateAndPersist] SecItemAdd cert addStatus: \(addStatus)")
         guard addStatus == errSecSuccess || addStatus == errSecDuplicateItem else {
+            PadLog.network("PadServerIdentity: failed to persist certificate to Keychain (OSStatus=\(addStatus))")
             throw NSError(domain: NSOSStatusErrorDomain, code: Int(addStatus), userInfo: [
                 NSLocalizedDescriptionKey: "Failed to persist certificate to Keychain: \(addStatus)"
             ])

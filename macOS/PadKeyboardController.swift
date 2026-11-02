@@ -165,15 +165,9 @@ final class PadKeyboardController {
 
             switch action {
             case .lockScreen:
-                // Cmd + Ctrl + Q or SACLockScreenImmediate
-                DispatchQueue.main.async {
-                    _ = NSWorkspace.shared
-                    // Use macOS system command via Process/AppleScript or shortcut
-                    let process = Process()
-                    process.launchPath = "/usr/bin/pmset"
-                    process.arguments = ["displaysleepnow"]
-                    try? process.run()
-                    completion(true, "Layar Mac berhasil dikunci")
+                // Cmd + Ctrl + Q (keyCode 12 = Q, matching PadStandardShortcut.lockScreen)
+                self.executeShortcut(keyCode: 12, modifiers: [.ctrl, .cmd]) { ok, msg in
+                    completion(ok, ok ? "Layar Mac berhasil dikunci" : msg)
                 }
 
             case .sleep:
@@ -184,9 +178,9 @@ final class PadKeyboardController {
                     if error == nil {
                         completion(true, "Mac masuk ke mode Sleep")
                     } else {
-                        // Fallback pmset sleepnow
+                        // Fallback pmset sleepnow using modern Process.executableURL
                         let process = Process()
-                        process.launchPath = "/usr/bin/pmset"
+                        process.executableURL = URL(fileURLWithPath: "/usr/bin/pmset")
                         process.arguments = ["sleepnow"]
                         try? process.run()
                         completion(true, "Perintah Sleep dikirim")
@@ -194,8 +188,8 @@ final class PadKeyboardController {
                 }
 
             case .screenshot:
-                // Cmd + Shift + 4 (interactive) or Cmd + Shift + 3 (fullscreen)
-                self.executeShortcut(keyCode: 20, modifiers: [.cmd, .shift]) { ok, msg in
+                // Cmd + Shift + 4 (keyCode 21 = 4 on ANSI US keyboard, matching PadStandardShortcut.screenshot)
+                self.executeShortcut(keyCode: 21, modifiers: [.cmd, .shift]) { ok, msg in
                     completion(ok, ok ? "Tangkapan layar aktif" : msg)
                 }
 

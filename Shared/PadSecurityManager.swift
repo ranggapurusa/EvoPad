@@ -258,7 +258,8 @@ enum PadCertificateVerifier {
     /// - Certificate structure and self-signed signature
     static func verifyServerCertificate(
         trust: SecTrust,
-        pinnedFingerprintHex: String
+        pinnedFingerprintHex: String,
+        evaluationDate: Date = Date()
     ) -> Bool {
         guard let chain = SecTrustCopyCertificateChain(trust) as? [SecCertificate],
               let certificate = chain.first else {
@@ -266,8 +267,24 @@ enum PadCertificateVerifier {
             return false
         }
 
-        // 1. Verify SHA-256 Fingerprint (Exact pinning)
         let certDER = SecCertificateCopyData(certificate) as Data
+        return verifyCertificateData(
+            certificate: certificate,
+            certDER: certDER,
+            pinnedFingerprintHex: pinnedFingerprintHex,
+            evaluationDate: evaluationDate
+        )
+    }
+
+    /// Standalone deterministic verifier for a raw DER certificate and `SecCertificate`
+    /// against a pinned SHA-256 fingerprint and evaluation timestamp.
+    static func verifyCertificateData(
+        certificate: SecCertificate,
+        certDER: Data,
+        pinnedFingerprintHex: String,
+        evaluationDate: Date = Date()
+    ) -> Bool {
+        // 1. Verify SHA-256 Fingerprint (Exact pinning)
         let actualFingerprint = PadCryptoUtils.sha256Hex(data: certDER)
         guard actualFingerprint.caseInsensitiveCompare(pinnedFingerprintHex) == .orderedSame else {
             PadLog.network("PadCertificateVerifier: fingerprint mismatch. Expected: \(pinnedFingerprintHex), got: \(actualFingerprint)")
@@ -285,8 +302,12 @@ enum PadCertificateVerifier {
             return false
         }
 
-        // 3. Verify Validity Period and Structure via ASN.1 / SecCertificateCopyValues
-        guard verifyCertificateExtensionsAndDates(certificate: certificate, certDER: certDER) else {
+        // 3. Verify Validity Period (notBefore / notAfter) and Extensions via ASN.1 DER
+        guard verifyCertificateExtensionsAndDates(
+            certificate: certificate,
+            certDER: certDER,
+            evaluationDate: evaluationDate
+        ) else {
             PadLog.network("PadCertificateVerifier: certificate extensions or validity dates invalid")
             return false
         }
@@ -301,14 +322,36 @@ enum PadCertificateVerifier {
         return true
     }
 
-    /// Verifies validity dates, KeyUsage (digitalSignature), and ExtendedKeyUsage (serverAuth).
-    private static func verifyCertificateExtensionsAndDates(
+    /// Verifies X.509 validity dates (`notBefore` and `notAfter`), KeyUsage (`digitalSignature`), and ExtendedKeyUsage (`serverAuth`).
+    static func verifyCertificateExtensionsAndDates(
         certificate: SecCertificate,
-        certDER: Data
+        certDER: Data,
+        evaluationDate: Date = Date()
     ) -> Bool {
         // Parse basic DER structure of Certificate:
         // SEQUENCE { tbsCertificate SEQUENCE { ... }, sigAlg, sig }
         guard let tbs = extractTBSCertificate(certDER: certDER) else { return false }
+
+        // Parse and validate X.509 Validity period (notBefore <= evaluationDate <= notAfter)
+        guard let (notBefore, notAfter) = extractValidityDates(tbsDER: tbs) else {
+            PadLog.network("PadCertificateVerifier: failed to parse ASN.1 Validity (notBefore/notAfter) from TBSCertificate")
+            return false
+        }
+
+        guard notBefore <= notAfter else {
+            PadLog.network("PadCertificateVerifier: invalid certificate validity window (notBefore > notAfter)")
+            return false
+        }
+
+        if evaluationDate < notBefore {
+            PadLog.network("PadCertificateVerifier: certificate is not yet valid (notBefore=\(notBefore), now=\(evaluationDate))")
+            return false
+        }
+
+        if evaluationDate > notAfter {
+            PadLog.network("PadCertificateVerifier: certificate has expired (notAfter=\(notAfter), now=\(evaluationDate))")
+            return false
+        }
 
         // Check that key usage OID (2.5.29.15) and serverAuth EKU OID (1.3.6.1.5.5.7.3.1) are present in TBS
         let keyUsageOid = Data([0x55, 0x1D, 0x0F]) // 2.5.29.15
@@ -325,6 +368,155 @@ enum PadCertificateVerifier {
         }
 
         return true
+    }
+
+    /// Extracts `(notBefore, notAfter)` from a DER-encoded `TBSCertificate`.
+    /// TBSCertificate ::= SEQUENCE {
+    ///   version         [0] EXPLICIT Version DEFAULT v1,
+    ///   serialNumber         CertificateSerialNumber (INTEGER),
+    ///   signature            AlgorithmIdentifier (SEQUENCE),
+    ///   issuer               Name (SEQUENCE),
+    ///   validity             Validity (SEQUENCE { notBefore Time, notAfter Time }),
+    ///   ...
+    /// }
+    static func extractValidityDates(tbsDER: Data) -> (notBefore: Date, notAfter: Date)? {
+        guard tbsDER.count > 16, tbsDER[0] == 0x30 else { return nil }
+        var index = 1
+        let tbsContentLen = parseDERLength(tbsDER, index: &index)
+        let tbsEnd = index + tbsContentLen
+        guard tbsEnd <= tbsDER.count else { return nil }
+
+        // Optional [0] EXPLICIT version (tag 0xA0)
+        if index < tbsEnd, tbsDER[index] == 0xA0 {
+            guard skipDERElement(tbsDER, index: &index, limit: tbsEnd) else { return nil }
+        }
+
+        // 1. serialNumber (INTEGER: tag 0x02)
+        guard index < tbsEnd, tbsDER[index] == 0x02,
+              skipDERElement(tbsDER, index: &index, limit: tbsEnd) else { return nil }
+
+        // 2. signature AlgorithmIdentifier (SEQUENCE: tag 0x30)
+        guard index < tbsEnd, tbsDER[index] == 0x30,
+              skipDERElement(tbsDER, index: &index, limit: tbsEnd) else { return nil }
+
+        // 3. issuer Name (SEQUENCE: tag 0x30)
+        guard index < tbsEnd, tbsDER[index] == 0x30,
+              skipDERElement(tbsDER, index: &index, limit: tbsEnd) else { return nil }
+
+        // 4. validity (SEQUENCE: tag 0x30)
+        guard index < tbsEnd, tbsDER[index] == 0x30 else { return nil }
+        index += 1
+        let validityLen = parseDERLength(tbsDER, index: &index)
+        let validityEnd = index + validityLen
+        guard validityEnd <= tbsEnd else { return nil }
+
+        guard let notBefore = parseASN1Time(tbsDER, index: &index, limit: validityEnd),
+              let notAfter = parseASN1Time(tbsDER, index: &index, limit: validityEnd) else {
+            return nil
+        }
+
+        return (notBefore, notAfter)
+    }
+
+    private static func skipDERElement(_ data: Data, index: inout Int, limit: Int) -> Bool {
+        guard index < limit else { return false }
+        index += 1 // skip tag
+        let len = parseDERLength(data, index: &index)
+        guard len >= 0, index + len <= limit else { return false }
+        index += len
+        return true
+    }
+
+    /// Parses an ASN.1 `UTCTime` (tag `0x17`) or `GeneralizedTime` (tag `0x18`) element.
+    private static func parseASN1Time(_ data: Data, index: inout Int, limit: Int) -> Date? {
+        guard index < limit else { return nil }
+        let tag = data[index]
+        guard tag == 0x17 || tag == 0x18 else { return nil }
+        index += 1
+        let len = parseDERLength(data, index: &index)
+        guard len > 0, index + len <= limit else { return nil }
+
+        let timeBytes = data.subdata(in: index..<(index + len))
+        index += len
+
+        guard let rawString = String(data: timeBytes, encoding: .ascii) else { return nil }
+        return parseASN1TimeString(rawString, isGeneralized: tag == 0x18)
+    }
+
+    private static func parseASN1TimeString(_ string: String, isGeneralized: Bool) -> Date? {
+        guard string.hasSuffix("Z") else { return nil }
+        let digits = String(string.dropLast())
+        guard digits.allSatisfy({ $0.isNumber }) else { return nil }
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+
+        if isGeneralized {
+            // GeneralizedTime: YYYYMMDDHHMMSSZ (14 digits)
+            guard digits.count == 14 else { return nil }
+            let vals = Array(digits)
+            guard let year = Int(String(vals[0..<4])),
+                  let month = Int(String(vals[4..<6])),
+                  let day = Int(String(vals[6..<8])),
+                  let hour = Int(String(vals[8..<10])),
+                  let minute = Int(String(vals[10..<12])),
+                  let second = Int(String(vals[12..<14])) else {
+                return nil
+            }
+            return makeStrictUTCDate(calendar: calendar, year: year, month: month, day: day, hour: hour, minute: minute, second: second)
+        } else {
+            // RFC 5280 UTCTime: YYMMDDHHMMSSZ (12 digits; YY >= 50 -> 19YY, YY < 50 -> 20YY)
+            guard digits.count == 12 else { return nil }
+            let vals = Array(digits)
+            guard let yy = Int(String(vals[0..<2])),
+                  let month = Int(String(vals[2..<4])),
+                  let day = Int(String(vals[4..<6])),
+                  let hour = Int(String(vals[6..<8])),
+                  let minute = Int(String(vals[8..<10])),
+                  let second = Int(String(vals[10..<12])) else {
+                return nil
+            }
+            let year = (yy >= 50) ? (1900 + yy) : (2000 + yy)
+            return makeStrictUTCDate(calendar: calendar, year: year, month: month, day: day, hour: hour, minute: minute, second: second)
+        }
+    }
+
+    private static func makeStrictUTCDate(
+        calendar: Calendar,
+        year: Int,
+        month: Int,
+        day: Int,
+        hour: Int,
+        minute: Int,
+        second: Int
+    ) -> Date? {
+        guard (1...12).contains(month),
+              (1...31).contains(day),
+              (0...23).contains(hour),
+              (0...59).contains(minute),
+              (0...59).contains(second) else {
+            return nil
+        }
+        var comps = DateComponents()
+        comps.year = year
+        comps.month = month
+        comps.day = day
+        comps.hour = hour
+        comps.minute = minute
+        comps.second = second
+        comps.timeZone = TimeZone(secondsFromGMT: 0)
+        guard let date = calendar.date(from: comps) else { return nil }
+        // Guard against calendar overflow (e.g. Feb 30 rolling into March)
+        let roundTrip = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
+        guard roundTrip.year == year,
+              roundTrip.month == month,
+              roundTrip.day == day,
+              roundTrip.hour == hour,
+              roundTrip.minute == minute,
+              roundTrip.second == second else {
+            return nil
+        }
+        return date
     }
 
     /// Verifies self-signed signature of the TBSCertificate against the certificate's public key.

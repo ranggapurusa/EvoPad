@@ -355,6 +355,9 @@ struct MacContentView: View {
             }
             .padding(24)
             .frame(width: 340)
+            .onDisappear {
+                stopQRCountdown()
+            }
             .onChange(of: server.qrErrorMessage) { _, newValue in
                 if newValue != nil {
                     stopQRCountdown()
