@@ -73,6 +73,11 @@ final class TrackpadInputView: UIView {
     private var isDragging = false
     private var dragWorkItem: DispatchWorkItem?
 
+    // Visual scroll indicator
+    private let scrollTrackView = UIView()
+    private let scrollThumbView = UIView()
+    private var scrollFadeWorkItem: DispatchWorkItem?
+
     // Frame-coalesced motion queue.
     private var pendingPointerDelta = CGPoint.zero
     private var pendingScrollDelta = CGPoint.zero
@@ -108,6 +113,7 @@ final class TrackpadInputView: UIView {
     deinit {
         displayLink?.invalidate()
         dragWorkItem?.cancel()
+        scrollFadeWorkItem?.cancel()
     }
 
     private func commonInit() {
@@ -118,6 +124,40 @@ final class TrackpadInputView: UIView {
         layer.cornerRadius = 22
         layer.borderWidth = 1
         layer.borderColor = UIColor.white.withAlphaComponent(0.10).cgColor
+
+        // Visual scrollbar on right edge
+        scrollTrackView.backgroundColor = UIColor.white.withAlphaComponent(0.08)
+        scrollTrackView.layer.cornerRadius = 3
+        scrollTrackView.clipsToBounds = true
+        scrollTrackView.isUserInteractionEnabled = false
+        scrollTrackView.alpha = 0.75
+
+        scrollThumbView.backgroundColor = UIColor(red: 0.388, green: 0.400, blue: 0.945, alpha: 0.90)
+        scrollThumbView.layer.cornerRadius = 2
+        scrollThumbView.isUserInteractionEnabled = false
+
+        scrollTrackView.addSubview(scrollThumbView)
+        addSubview(scrollTrackView)
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let trackWidth: CGFloat = 6
+        let trackHeight: CGFloat = min(bounds.height * 0.45, 160)
+        let rightMargin: CGFloat = 12
+        scrollTrackView.frame = CGRect(
+            x: bounds.width - trackWidth - rightMargin,
+            y: (bounds.height - trackHeight) / 2,
+            width: trackWidth,
+            height: trackHeight
+        )
+        let thumbHeight: CGFloat = max(36, trackHeight * 0.35)
+        scrollThumbView.frame = CGRect(
+            x: 1,
+            y: (trackHeight - thumbHeight) / 2,
+            width: trackWidth - 2,
+            height: thumbHeight
+        )
     }
 
     override func didMoveToWindow() {
@@ -361,10 +401,12 @@ final class TrackpadInputView: UIView {
             if totalMovement >= scrollStartThreshold {
                 gestureMode = .scrolling
                 queueMotion(delta, kind: .scroll)
+                highlightScrollIndicator()
             }
 
         case .scrolling:
             queueMotion(delta, kind: .scroll)
+            highlightScrollIndicator()
 
         case .threeFingerDragPending:
             threeFingerDragMovement += hypot(delta.x, delta.y)
@@ -383,6 +425,25 @@ final class TrackpadInputView: UIView {
         case .fourFingerSwipe, .ignored:
             break
         }
+    }
+
+    private func highlightScrollIndicator() {
+        scrollFadeWorkItem?.cancel()
+        UIView.animate(withDuration: 0.12) {
+            self.scrollThumbView.backgroundColor = UIColor(red: 0.488, green: 0.500, blue: 1.0, alpha: 1.0)
+            self.scrollThumbView.alpha = 1.0
+            self.scrollTrackView.alpha = 1.0
+        }
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            UIView.animate(withDuration: 0.35) {
+                self.scrollThumbView.backgroundColor = UIColor(red: 0.388, green: 0.400, blue: 0.945, alpha: 0.90)
+                self.scrollThumbView.alpha = 0.75
+                self.scrollTrackView.alpha = 0.75
+            }
+        }
+        scrollFadeWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
     }
 
     private func queueMotion(_ delta: CGPoint, kind: MotionKind) {
