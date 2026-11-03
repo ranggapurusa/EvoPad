@@ -3,6 +3,7 @@ import SwiftUI
 struct PadContentView: View {
     @StateObject private var connection = PadConnectionManager()
     @State private var inputFeedback = "Siap menerima gesture"
+    @State private var isScrolling = false
 
     var body: some View {
         VStack(spacing: 14) {
@@ -36,6 +37,14 @@ struct PadContentView: View {
 
             TrackpadSurface(onCommand: { command in
                 connection.send(command)
+                if command.type == .scroll {
+                    isScrolling = true
+                    // ponytail: simple timer-based reset, upgrade to CADisplayLink if frame-accurate tracking needed
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 300_000_000)
+                        isScrolling = false
+                    }
+                }
             }, onStatus: { message in
                 inputFeedback = message
             })
@@ -46,6 +55,27 @@ struct PadContentView: View {
                     .foregroundStyle(.white.opacity(0.30))
                     .padding(18)
                     .allowsHitTesting(false)
+            }
+            .overlay(alignment: .trailing) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(Color.white.opacity(0.04))
+                        .frame(width: 6, height: 140)
+
+                    VStack(spacing: 5) {
+                        Image(systemName: "chevron.up")
+                            .font(.system(size: 8, weight: .bold))
+                        Capsule()
+                            .fill(isScrolling ? Color.indigo : Color.white.opacity(0.22))
+                            .frame(width: 4, height: isScrolling ? 54 : 32)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 8, weight: .bold))
+                    }
+                    .foregroundStyle(isScrolling ? Color.indigo : Color.white.opacity(0.22))
+                }
+                .padding(.trailing, 12)
+                .allowsHitTesting(false)
+                .animation(.easeInOut(duration: 0.15), value: isScrolling)
             }
             .overlay(alignment: .bottomTrailing) {
                 Text("1 jari: kursor  ·  2 jari: scroll  ·  3 jari: drag  ·  4 jari: Mac gestures")
