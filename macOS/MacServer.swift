@@ -210,6 +210,13 @@ final class MacServer: ObservableObject {
         }
     }
 
+    func stop() {
+        listener?.cancel()
+        listener = nil
+        isListening = false
+        statusText = "Layanan dinonaktifkan"
+    }
+
     func refreshPermission() {
         hasAccessibilityPermission = eventController.hasAccessibilityPermission && keyboardController.hasAccessibilityPermission
     }

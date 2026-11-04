@@ -95,57 +95,74 @@ final class PadConnectionManager: ObservableObject {
     func startDiscovery() {
         networkQueue.async { [weak self] in
             guard let self else { return }
+            self.startDiscoveryOnNetworkQueue()
+        }
+    }
+
+    func stopDiscovery() {
+        networkQueue.async { [weak self] in
+            guard let self else { return }
+            self.stopDiscoveryOnNetworkQueue()
+        }
+    }
+
+    private func startDiscoveryOnNetworkQueue() {
+        dispatchPrecondition(condition: .onQueue(networkQueue))
+        guard browser == nil else { return }
+
+        let parameters = NWParameters()
+        parameters.includePeerToPeer = true
+        let descriptor = NWBrowser.Descriptor.bonjour(type: PadProtocol.serviceType, domain: nil)
+        let newBrowser = NWBrowser(for: descriptor, using: parameters)
+
+        newBrowser.stateUpdateHandler = { [weak self] (state: NWBrowser.State) in
+            guard let self else { return }
             dispatchPrecondition(condition: .onQueue(self.networkQueue))
-            guard self.browser == nil else { return }
-
-            let parameters = NWParameters()
-            parameters.includePeerToPeer = true
-            let descriptor = NWBrowser.Descriptor.bonjour(type: PadProtocol.serviceType, domain: nil)
-            let newBrowser = NWBrowser(for: descriptor, using: parameters)
-
-            newBrowser.stateUpdateHandler = { [weak self] state in
-                guard let self else { return }
-                dispatchPrecondition(condition: .onQueue(self.networkQueue))
-                if case .failed(let error) = state {
-                    DispatchQueue.main.async {
-                        self.statusText = "Pencarian gagal: \(error.localizedDescription)"
-                    }
+            if case .failed(let error) = state {
+                DispatchQueue.main.async {
+                    self.statusText = "Pencarian gagal: \(error.localizedDescription)"
                 }
-            }
-
-            newBrowser.browseResultsChangedHandler = { [weak self] results, _ in
-                guard let self, let first = results.first else { return }
-                dispatchPrecondition(condition: .onQueue(self.networkQueue))
-                self.lastEndpoint = first.endpoint
-                guard self.connection == nil else { return }
-
-                if let qr = self.activeQRData, !qr.isExpired {
-                    DispatchQueue.main.async {
-                        self.statusText = "Mac ditemukan, menghubungkan untuk pairing via TLS..."
-                    }
-                    self.connectWithTLSOnNetworkQueue(to: first.endpoint, pinnedFingerprintHex: qr.certFingerprintHex, mode: "pairing")
-                    return
-                }
-
-                let paired = PadKeychainStore.shared.loadPairedDevices()
-                if let saved = paired.first, let fingerprint = saved.certFingerprintHex {
-                    DispatchQueue.main.async {
-                        self.statusText = "Mac ditemukan, menghubungkan kembali via TLS..."
-                    }
-                    self.connectWithTLSOnNetworkQueue(to: first.endpoint, pinnedFingerprintHex: fingerprint, mode: "reconnect")
-                } else {
-                    DispatchQueue.main.async {
-                        self.statusText = "Mac ditemukan. Pindai kode QR untuk pairing."
-                    }
-                }
-            }
-
-            self.browser = newBrowser
-            newBrowser.start(queue: self.networkQueue)
-            DispatchQueue.main.async {
-                self.statusText = "Mencari Mac di jaringan lokal..."
             }
         }
+
+        newBrowser.browseResultsChangedHandler = { [weak self] (results: Set<NWBrowser.Result>, _: Set<NWBrowser.Result.Change>) in
+            guard let self, let first = results.first else { return }
+            dispatchPrecondition(condition: .onQueue(self.networkQueue))
+            self.lastEndpoint = first.endpoint
+            guard self.connection == nil else { return }
+
+            if let qr = self.activeQRData, !qr.isExpired {
+                DispatchQueue.main.async {
+                    self.statusText = "Mac ditemukan, menghubungkan untuk pairing via TLS..."
+                }
+                self.connectWithTLSOnNetworkQueue(to: first.endpoint, pinnedFingerprintHex: qr.certFingerprintHex, mode: "pairing")
+                return
+            }
+
+            let paired = PadKeychainStore.shared.loadPairedDevices()
+            if let saved = paired.first, let fingerprint = saved.certFingerprintHex {
+                DispatchQueue.main.async {
+                    self.statusText = "Mac ditemukan, menghubungkan kembali via TLS..."
+                }
+                self.connectWithTLSOnNetworkQueue(to: first.endpoint, pinnedFingerprintHex: fingerprint, mode: "reconnect")
+            } else {
+                DispatchQueue.main.async {
+                    self.statusText = "Mac ditemukan. Pindai kode QR untuk pairing."
+                }
+            }
+        }
+
+        self.browser = newBrowser
+        newBrowser.start(queue: self.networkQueue)
+        DispatchQueue.main.async {
+            self.statusText = "Mencari Mac di jaringan lokal..."
+        }
+    }
+
+    private func stopDiscoveryOnNetworkQueue() {
+        dispatchPrecondition(condition: .onQueue(networkQueue))
+        browser?.cancel()
+        browser = nil
     }
 
     // MARK: - QR Pairing Initiation (M2.3)
@@ -267,6 +284,7 @@ final class PadConnectionManager: ObservableObject {
                     self.isConnected = false
                     self.isAuthenticated = false
                 }
+                self.startDiscoveryOnNetworkQueue()
 
             default:
                 break
@@ -629,6 +647,7 @@ final class PadConnectionManager: ObservableObject {
                     self.isAuthenticated = false
                 }
                 activeConnection.cancel()
+                self.startDiscoveryOnNetworkQueue()
                 return
             }
 
@@ -845,6 +864,7 @@ final class PadConnectionManager: ObservableObject {
             }
 
             clearHandshakeStateOnNetworkQueue()
+            stopDiscoveryOnNetworkQueue()
             reconnectAttemptCount = 0
             DispatchQueue.main.async {
                 self.isConnected = true
@@ -858,6 +878,7 @@ final class PadConnectionManager: ObservableObject {
     private func handlePairingComplete(_ envelope: PadEnvelopeV2) {
         dispatchPrecondition(condition: .onQueue(networkQueue))
         clearHandshakeStateOnNetworkQueue()
+        stopDiscoveryOnNetworkQueue()
         reconnectAttemptCount = 0
         self.checkPairedStatus()
         DispatchQueue.main.async {

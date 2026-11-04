@@ -298,6 +298,9 @@ final class TrackpadInputView: UIView {
     private var displayLink: CADisplayLink?
     private lazy var displayLinkTarget = DisplayLinkTarget(owner: self)
 
+    // Reusable feedback generator to avoid CoreHaptics re-allocation overhead
+    private let hapticFeedback = UIImpactFeedbackGenerator(style: .medium)
+
     // Diagnostics: "generated" counts every raw touch delta before 60 Hz
     // coalescing; "sent" counts the coalesced commands actually emitted.
     // The gap between the two is exactly how much the frame-coalescing is
@@ -702,7 +705,7 @@ final class TrackpadInputView: UIView {
         onCommand?(.gesture(direction))
         PadLog.gesture("iPad: gesture command sent to connection layer, direction=\(direction.rawValue)")
         onStatus?("4 jari dikenali: \(direction.title). Dikirim ke Mac; menunggu konfirmasi.")
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        hapticFeedback.impactOccurred()
     }
 
     private func applyMovement(_ delta: CGPoint) {
@@ -778,7 +781,11 @@ final class TrackpadInputView: UIView {
             pendingScrollDelta.x += delta.x
             pendingScrollDelta.y += delta.y
         }
-        startDisplayLinkIfNeeded()
+        if displayLink == nil {
+            startDisplayLinkIfNeeded()
+        } else {
+            displayLink?.isPaused = false
+        }
     }
 
     private func startDisplayLinkIfNeeded() {
@@ -810,12 +817,13 @@ final class TrackpadInputView: UIView {
             sentRate.tick()
         }
 
-        // Keep the display link alive for the entire active touch sequence.
-        // Invalidating it after every quiet frame would recreate it for nearly
-        // every touch callback and add avoidable scheduling jitter.
-        if pendingPointerDelta == .zero && pendingScrollDelta == .zero && activeTouches.isEmpty {
+        // Keep the display link alive for the active touch sequence,
+        // but pause it if fingers are resting stationary to eliminate 60Hz CPU wakes.
+        if activeTouches.isEmpty {
             displayLink?.invalidate()
             displayLink = nil
+        } else if pointer == .zero && scroll == .zero {
+            displayLink?.isPaused = true
         }
     }
 

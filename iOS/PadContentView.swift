@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 #if canImport(UIKit)
 import UIKit
@@ -53,6 +54,12 @@ struct PadContentView: View {
     // Input Component Visibility (toggled directly via Keyboard & Trackpad tabs)
     @AppStorage("evopad.showKeyboardInMode") private var showKeyboardInMode: Bool = true
     @AppStorage("evopad.showTouchpadInMode") private var showTouchpadInMode: Bool = true
+
+    // 24/7 Continuous Operation & Smart OLED Eco Standby
+    @AppStorage("evopad.ecoStandbyEnabled") private var ecoStandbyEnabled: Bool = true
+    @State private var isEcoStandbyActive = false
+    @State private var lastInteractionAt = Date()
+    private let idleCheckTimer = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
 
     // Persistent Modifiers
     @State private var isCmdActive = false
@@ -121,10 +128,63 @@ struct PadContentView: View {
                 ))
                 .zIndex(100)
             }
+
+            // MARK: - Smart OLED Eco Standby (24/7 Power Saving)
+            if isEcoStandbyActive {
+                ZStack {
+                    Color.black.ignoresSafeArea()
+
+                    VStack(spacing: 12) {
+                        Image(systemName: "moon.stars.fill")
+                            .font(.system(size: 34))
+                            .foregroundStyle(Color.white.opacity(0.22))
+
+                        Text("EvoPad Eco Standby")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(Color.white.opacity(0.35))
+
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(connection.isAuthenticated ? Color(red: 34 / 255, green: 197 / 255, blue: 94 / 255) : Color(red: 239 / 255, green: 68 / 255, blue: 68 / 255))
+                                .frame(width: 6, height: 6)
+                            Text(connection.isAuthenticated ? "Mac Terhubung • Mode Hemat Layar" : "Mencari Mac...")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(Color.white.opacity(0.25))
+                        }
+
+                        Text("Sentuh di mana saja untuk mengaktifkan kembali")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Color.white.opacity(0.18))
+                            .padding(.top, 8)
+                    }
+                }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    recordUserActivity()
+                }
+                .transition(.opacity)
+                .zIndex(150)
+            }
         }
         .preferredColorScheme(.dark)
         .onAppear {
+            #if canImport(UIKit)
+            UIApplication.shared.isIdleTimerDisabled = true
+            #endif
             connection.startDiscovery()
+        }
+        .onDisappear {
+            #if canImport(UIKit)
+            UIApplication.shared.isIdleTimerDisabled = false
+            #endif
+        }
+        .onReceive(idleCheckTimer) { _ in
+            guard ecoStandbyEnabled, !isEcoStandbyActive else { return }
+            if Date().timeIntervalSince(lastInteractionAt) > 120 {
+                withAnimation(.easeInOut(duration: 0.5)) {
+                    isEcoStandbyActive = true
+                }
+            }
         }
         .onChange(of: connection.isAuthenticated) { _, isAuth in
             if isAuth {
@@ -185,6 +245,23 @@ struct PadContentView: View {
 
             Spacer()
 
+            // Eco Standby Toggle (24/7 Power Saving)
+            Button {
+                ecoStandbyEnabled.toggle()
+                recordUserActivity()
+            } label: {
+                Image(systemName: ecoStandbyEnabled ? "leaf.fill" : "leaf")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(ecoStandbyEnabled ? Color(red: 34 / 255, green: 197 / 255, blue: 94 / 255) : EvoTheme.textSecondary)
+                    .frame(width: 32, height: 32)
+                    .background(EvoTheme.panel, in: RoundedRectangle(cornerRadius: 8))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .strokeBorder(ecoStandbyEnabled ? Color(red: 34 / 255, green: 197 / 255, blue: 94 / 255).opacity(0.4) : EvoTheme.border, lineWidth: 1)
+                    )
+            }
+            .buttonStyle(.plain)
+
             // Quick QR pairing button shortcut if not paired
             if !connection.isPairedWithMac {
                 Button {
@@ -204,6 +281,15 @@ struct PadContentView: View {
             }
         }
         .frame(height: 38)
+    }
+
+    private func recordUserActivity() {
+        lastInteractionAt = Date()
+        if isEcoStandbyActive {
+            withAnimation(.easeOut(duration: 0.18)) {
+                isEcoStandbyActive = false
+            }
+        }
     }
 
     // MARK: - Navigation Tab Bar (7 items with direct on/off toggle for Keyboard & Trackpad)

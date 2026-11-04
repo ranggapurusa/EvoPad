@@ -110,28 +110,35 @@ struct EvoNowPlayingState: Equatable {
 // MARK: - Animated Equalizer Waveform
 
 struct EvoIslandWaveformView: View {
+    var isPlaying: Bool = true
     @State private var animating = false
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 2) {
             RoundedRectangle(cornerRadius: 1)
                 .fill(Color(red: 34 / 255, green: 197 / 255, blue: 94 / 255))
-                .frame(width: 2.5, height: animating ? 12 : 4)
-                .animation(.easeInOut(duration: 0.45).repeatForever(autoreverses: true), value: animating)
+                .frame(width: 2.5, height: (animating && isPlaying) ? 12 : 4)
+                .animation(isPlaying ? .easeInOut(duration: 0.45).repeatForever(autoreverses: true) : .default, value: animating)
 
             RoundedRectangle(cornerRadius: 1)
                 .fill(Color(red: 34 / 255, green: 197 / 255, blue: 94 / 255))
-                .frame(width: 2.5, height: animating ? 5 : 14)
-                .animation(.easeInOut(duration: 0.35).repeatForever(autoreverses: true).delay(0.1), value: animating)
+                .frame(width: 2.5, height: (animating && isPlaying) ? 5 : 14)
+                .animation(isPlaying ? .easeInOut(duration: 0.35).repeatForever(autoreverses: true).delay(0.1) : .default, value: animating)
 
             RoundedRectangle(cornerRadius: 1)
                 .fill(Color(red: 34 / 255, green: 197 / 255, blue: 94 / 255))
-                .frame(width: 2.5, height: animating ? 14 : 7)
-                .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true).delay(0.2), value: animating)
+                .frame(width: 2.5, height: (animating && isPlaying) ? 14 : 7)
+                .animation(isPlaying ? .easeInOut(duration: 0.5).repeatForever(autoreverses: true).delay(0.2) : .default, value: animating)
         }
         .frame(height: 14)
         .onAppear {
-            animating = true
+            if isPlaying { animating = true }
+        }
+        .onDisappear {
+            animating = false
+        }
+        .onChange(of: isPlaying) { _, playing in
+            animating = playing
         }
     }
 }
