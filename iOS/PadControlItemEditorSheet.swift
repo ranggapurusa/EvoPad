@@ -76,7 +76,7 @@ struct PadControlItemEditorSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Tampilan Tombol (M5.3)") {
+                Section("Tampilan Tombol") {
                     TextField("Label Tombol", text: $label)
 
                     Picker("Kategori", selection: $category) {

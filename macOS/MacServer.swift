@@ -557,12 +557,20 @@ final class MacServer: ObservableObject {
                 buffer.append(data)
             }
 
+            var pendingMoveDx: Double = 0
+            var pendingMoveDy: Double = 0
+            var hasPendingMove = false
+
             loop: while true {
                 switch PadFrameCodec.popNextFrame(from: &buffer) {
                 case .needMoreData:
                     break loop
 
                 case .frameTooLarge(let size):
+                    if hasPendingMove {
+                        self.handleV1Command(PadCommand(type: .move, dx: pendingMoveDx, dy: pendingMoveDy), over: connection)
+                        hasPendingMove = false
+                    }
                     PadLog.network("Mac: frame rejected (>16KB, size=\(size))")
                     self.sendEnvelopeV2(
                         .error(requestId: "frame-limit", code: .frameTooLarge, message: "Frame melebihi 16 KB"),
@@ -574,8 +582,36 @@ final class MacServer: ObservableObject {
 
                 case .line(let line):
                     if line.isEmpty { continue }
+
+                    // Batch-coalesce consecutive high-frequency pointer moves in the same network chunk
+                    if line.count < 128,
+                       let str = String(data: line, encoding: .utf8),
+                       str.contains("\"move\""),
+                       let cmd = PadFrameCodec.parseFastMotionCommand(from: str),
+                       cmd.type == .move,
+                       let dx = cmd.dx, let dy = cmd.dy {
+                        guard self.isConnectionActiveAndAuthorized(connection) else { continue }
+                        pendingMoveDx += dx
+                        pendingMoveDy += dy
+                        hasPendingMove = true
+                        continue
+                    }
+
+                    // If a non-move frame is encountered, flush accumulated moves first to preserve strict event order
+                    if hasPendingMove {
+                        self.handleV1Command(PadCommand(type: .move, dx: pendingMoveDx, dy: pendingMoveDy), over: connection)
+                        pendingMoveDx = 0
+                        pendingMoveDy = 0
+                        hasPendingMove = false
+                    }
+
                     self.processFrame(line, connection: connection, connectionId: connectionId)
                 }
+            }
+
+            // Flush remaining coalesced motion at end of chunk
+            if hasPendingMove {
+                self.handleV1Command(PadCommand(type: .move, dx: pendingMoveDx, dy: pendingMoveDy), over: connection)
             }
 
             if error != nil || isComplete {

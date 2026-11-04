@@ -78,9 +78,9 @@ struct PadControlPanelView: View {
                         .padding(6)
                         .background(
                             RoundedRectangle(cornerRadius: 8)
-                                .fill(showQuickMediaStrip ? Color.indigo : Color.white.opacity(0.08))
+                                .fill(showQuickMediaStrip ? EvoTheme.accent : EvoTheme.keySurface)
                         )
-                        .foregroundStyle(showQuickMediaStrip ? .white : .secondary)
+                        .foregroundStyle(showQuickMediaStrip ? .white : EvoTheme.textSecondary)
                 }
                 .buttonStyle(.plain)
                 .help("Tampilkan/Sembunyikan Media & System Strip")
@@ -101,9 +101,9 @@ struct PadControlPanelView: View {
                     .padding(.vertical, 6)
                     .background(
                         RoundedRectangle(cornerRadius: 8)
-                            .fill(isEditingLayout ? Color.orange : Color.white.opacity(0.08))
+                            .fill(isEditingLayout ? Color.orange : EvoTheme.keySurface)
                     )
-                    .foregroundStyle(isEditingLayout ? .white : .secondary)
+                    .foregroundStyle(isEditingLayout ? .white : EvoTheme.textSecondary)
                 }
                 .buttonStyle(.plain)
 
@@ -114,8 +114,8 @@ struct PadControlPanelView: View {
                     Image(systemName: "folder.badge.gearshape")
                         .font(.system(size: 12, weight: .semibold))
                         .padding(6)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.08)))
-                        .foregroundStyle(.secondary)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(EvoTheme.keySurface))
+                        .foregroundStyle(EvoTheme.textSecondary)
                 }
                 .buttonStyle(.plain)
             }
@@ -174,7 +174,7 @@ struct PadControlPanelView: View {
                             .font(.caption2.weight(.bold))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 5)
-                            .background(Capsule().fill(Color.indigo))
+                            .background(Capsule().fill(EvoTheme.accent))
                             .foregroundStyle(.white)
                     }
                     .buttonStyle(.plain)
@@ -225,7 +225,11 @@ struct PadControlPanelView: View {
             }
             .frame(height: CGFloat(layout.rows) * rowHeight + CGFloat(max(0, layout.rows - 1)) * spacing)
             .padding(10)
-            .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
+            .background(EvoTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(EvoTheme.border, lineWidth: 1)
+            )
 
             // Collapsible Quick Media & System Strip (M4.4 Instant Access)
             if showQuickMediaStrip {
@@ -339,21 +343,13 @@ struct PadControlPanelView: View {
                 .frame(width: width, height: height)
                 .background(
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    item.color.swiftUIColor.opacity(isActionDisabled ? 0.32 : 0.85),
-                                    item.color.swiftUIColor.opacity(isActionDisabled ? 0.20 : 0.58)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                        .fill(item.color.swiftUIColor.opacity(isActionDisabled ? 0.15 : 0.35))
+                        .background(EvoTheme.keySurface, in: RoundedRectangle(cornerRadius: 10))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
                         .strokeBorder(
-                            isEditingLayout ? Color.orange.opacity(0.9) : Color.white.opacity(0.14),
+                            isEditingLayout ? Color.orange.opacity(0.9) : EvoTheme.border,
                             lineWidth: isEditingLayout ? 1.5 : 1
                         )
                 )
@@ -454,13 +450,17 @@ struct PadControlPanelView: View {
                         .font(.system(size: 13, weight: .semibold))
                         .frame(maxWidth: .infinity)
                         .frame(height: 36)
-                        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+                        .background(EvoTheme.keySurface, in: RoundedRectangle(cornerRadius: 8))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .strokeBorder(EvoTheme.border, lineWidth: 1)
+                        )
                 }
                 .buttonStyle(.plain)
                 .disabled(!connection.isAuthenticated)
             }
 
-            Divider().frame(height: 24).background(Color.white.opacity(0.15))
+            Divider().frame(height: 24).background(EvoTheme.border)
 
             ForEach([PadSystemControlAction.screenshot, .lockScreen, .sleep]) { action in
                 Button {
@@ -469,16 +469,24 @@ struct PadControlPanelView: View {
                 } label: {
                     Image(systemName: action.symbol)
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(action == .screenshot ? .indigo : .orange)
+                        .foregroundStyle(action == .screenshot ? EvoTheme.accent : Color.orange)
                         .frame(maxWidth: .infinity)
                         .frame(height: 36)
-                        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+                        .background(EvoTheme.keySurface, in: RoundedRectangle(cornerRadius: 8))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .strokeBorder(EvoTheme.border, lineWidth: 1)
+                        )
                 }
                 .buttonStyle(.plain)
                 .disabled(!connection.isAuthenticated)
             }
         }
         .padding(8)
-        .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
+        .background(EvoTheme.panel, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(EvoTheme.border, lineWidth: 1)
+        )
     }
 }

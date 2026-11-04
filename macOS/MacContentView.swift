@@ -16,36 +16,36 @@ struct MacContentView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                // Header
+                // Header Bar
                 HStack(spacing: 12) {
                     Image(systemName: "lock.shield.fill")
-                        .font(.system(size: 28, weight: .semibold))
+                        .font(.system(size: 26, weight: .semibold))
                         .foregroundStyle(.white)
-                        .frame(width: 54, height: 54)
-                        .background(Color.indigo, in: RoundedRectangle(cornerRadius: 15))
+                        .frame(width: 48, height: 48)
+                        .background(Color(red: 37 / 255, green: 99 / 255, blue: 235 / 255), in: RoundedRectangle(cornerRadius: 12))
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text("EvoPad Mac")
-                            .font(.title2.weight(.semibold))
-                        Text("TLS 1.3 · Mutual Authentication")
+                            .font(.title2.weight(.bold))
+                        Text("Koneksi Lokal Aman")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
                     Circle()
                         .fill(server.isListening ? Color.green : Color.orange)
-                        .frame(width: 9, height: 9)
-                    Text(server.isListening ? "TLS Listener Aktif" : "Menyiapkan")
+                        .frame(width: 8, height: 8)
+                    Text(server.isListening ? "Aktif" : "Menyiapkan")
                         .font(.caption.weight(.medium))
                         .foregroundStyle(.secondary)
                 }
 
-                // Security & Pairing Section (M2)
+                // Security & Pairing Section
                 GroupBox("Keamanan & Pairing") {
                     VStack(alignment: .leading, spacing: 10) {
                         HStack {
                             VStack(alignment: .leading, spacing: 3) {
-                                Text("Sertifikat Server (SHA-256 Fingerprint)")
+                                Text("Fingerprint Sertifikat Server")
                                     .font(.caption.weight(.medium))
                                     .foregroundStyle(.secondary)
                                 Text(server.certFingerprintHex.isEmpty ? "Identity belum siap" : server.certFingerprintHex)
@@ -67,7 +67,7 @@ struct MacContentView: View {
                                 showingPairingQRSheet = true
                             }
                             .buttonStyle(.borderedProminent)
-                            .tint(.indigo)
+                            .tint(Color(red: 37 / 255, green: 99 / 255, blue: 235 / 255))
                         }
 
                         Divider()
@@ -126,7 +126,7 @@ struct MacContentView: View {
                         Text("Perangkat: \(server.connectedDevice)")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
-                        Text("TLS 1.3 · Bonjour: \(PadProtocol.serviceType) · Port \(PadProtocol.port)")
+                        Text("Bonjour: \(PadProtocol.serviceType) · Port \(PadProtocol.port)")
                             .font(.caption.monospaced())
                             .foregroundStyle(.tertiary)
                     }
@@ -135,7 +135,7 @@ struct MacContentView: View {
                 }
 
                 // Input Feedback
-                GroupBox("Input terakhir") {
+                GroupBox("Input Terakhir") {
                     VStack(alignment: .leading, spacing: 8) {
                         Label(server.lastInputText, systemImage: "waveform.path")
                             .font(.subheadline)
@@ -152,7 +152,7 @@ struct MacContentView: View {
                 }
 
                 // Accessibility Permission
-                GroupBox("Izin Accessibility") {
+                GroupBox("Izin Aksesibilitas") {
                     VStack(alignment: .leading, spacing: 10) {
                         Label(
                             server.hasAccessibilityPermission ? "Izin sudah aktif" : "Izin belum diberikan",
@@ -160,7 +160,7 @@ struct MacContentView: View {
                         )
                         .foregroundStyle(server.hasAccessibilityPermission ? .green : .orange)
 
-                        Text("macOS memerlukan izin ini agar EvoPad dapat menggerakkan kursor, mengirim klik, dan menjalankan shortcut gesture.")
+                        Text("macOS memerlukan izin ini agar EvoPad dapat menggerakkan kursor, mengirim klik, dan menjalankan gesture.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -182,7 +182,7 @@ struct MacContentView: View {
                 }
 
                 // Four Finger Gestures Configuration
-                GroupBox("Gesture empat jari") {
+                GroupBox("Gesture Empat Jari") {
                     VStack(alignment: .leading, spacing: 12) {
                         gesturePicker("Atas", symbol: "arrow.up", direction: .up, value: $swipeUpAction)
                         gesturePicker("Bawah", symbol: "arrow.down", direction: .down, value: $swipeDownAction)
@@ -190,13 +190,13 @@ struct MacContentView: View {
                         gesturePicker("Kanan", symbol: "arrow.right", direction: .right, value: $swipeRightAction)
 
                         HStack {
-                            Button("Pulihkan default") {
+                            Button("Pulihkan Default") {
                                 swipeUpAction = PadSystemAction.missionControl.rawValue
                                 swipeDownAction = PadSystemAction.appExpose.rawValue
                                 swipeLeftAction = PadSystemAction.previousDesktop.rawValue
                                 swipeRightAction = PadSystemAction.nextDesktop.rawValue
                             }
-                            Button("Buka pengaturan shortcut") {
+                            Button("Pengaturan Shortcut macOS") {
                                 if let url = URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension") {
                                     NSWorkspace.shared.open(url)
                                 }
@@ -207,8 +207,8 @@ struct MacContentView: View {
                     .padding(.vertical, 4)
                 }
 
-                // M3.1 Shortcut Engine Testing
-                GroupBox("Tes Shortcut Mac (M3.1)") {
+                // Shortcut Engine Testing
+                GroupBox("Tes Shortcut Mac") {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Uji coba pengiriman event keyboard langsung pada Mac:")
                             .font(.caption)
@@ -231,17 +231,25 @@ struct MacContentView: View {
         }
         .frame(minWidth: 540, minHeight: 640)
         .onAppear { server.start() }
-        // Pairing Approval Sheet / Alert
+        .onChange(of: server.pendingPairingRequest != nil) { _, isPending in
+            if isPending {
+                closePairingQRSheet()
+            }
+        }
+        .onChange(of: server.pairedDevices.count) { _, _ in
+            closePairingQRSheet()
+        }
+        // Pairing Approval Sheet
         .sheet(item: $server.pendingPairingRequest) { request in
             VStack(spacing: 16) {
                 Image(systemName: "ipad.and.arrow.forward")
                     .font(.system(size: 40))
-                    .foregroundStyle(.indigo)
+                    .foregroundStyle(Color(red: 37 / 255, green: 99 / 255, blue: 235 / 255))
 
                 Text("Permintaan Pairing iPad")
                     .font(.headline)
 
-                Text("iPad \"\(request.clientName)\" ingin terhubung dan mengontrol Mac ini melalui saluran terenkripsi TLS 1.3.")
+                Text("iPad \"\(request.clientName)\" ingin terhubung dan mengontrol Mac ini melalui saluran terenkripsi.")
                     .font(.subheadline)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
@@ -249,15 +257,17 @@ struct MacContentView: View {
 
                 HStack(spacing: 16) {
                     Button("Tolak", role: .cancel) {
+                        closePairingQRSheet()
                         server.approvePendingPairing(approved: false)
                     }
                     .buttonStyle(.bordered)
 
                     Button("Izinkan Pairing") {
+                        closePairingQRSheet()
                         server.approvePendingPairing(approved: true)
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(.indigo)
+                    .tint(Color(red: 37 / 255, green: 99 / 255, blue: 235 / 255))
                 }
             }
             .padding(24)
@@ -269,7 +279,7 @@ struct MacContentView: View {
                 Text("Pindai QR Code di iPad")
                     .font(.headline)
 
-                Text("Buka aplikasi EvoPad di iPad Anda, lalu pilih 'Pindai QR' untuk pairing instan.")
+                Text("Buka aplikasi EvoPad di iPad Anda, lalu pilih 'Scan QR' untuk pairing instan.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -295,7 +305,7 @@ struct MacContentView: View {
                             startQRCountdown()
                         }
                         .buttonStyle(.borderedProminent)
-                        .tint(.indigo)
+                        .tint(Color(red: 37 / 255, green: 99 / 255, blue: 235 / 255))
                     }
                     .frame(width: 260, height: 220)
                 } else if qrTimeRemaining == 0 {
@@ -318,7 +328,7 @@ struct MacContentView: View {
                             startQRCountdown()
                         }
                         .buttonStyle(.borderedProminent)
-                        .tint(.indigo)
+                        .tint(Color(red: 37 / 255, green: 99 / 255, blue: 235 / 255))
                     }
                     .frame(width: 260, height: 220)
                 } else if let image = server.qrImage {
@@ -348,8 +358,7 @@ struct MacContentView: View {
                 }
 
                 Button("Tutup") {
-                    stopQRCountdown()
-                    showingPairingQRSheet = false
+                    closePairingQRSheet()
                 }
                 .buttonStyle(.bordered)
             }
@@ -381,6 +390,11 @@ struct MacContentView: View {
     private func stopQRCountdown() {
         timerSubscription?.invalidate()
         timerSubscription = nil
+    }
+
+    private func closePairingQRSheet() {
+        stopQRCountdown()
+        showingPairingQRSheet = false
     }
 
     @ViewBuilder

@@ -118,6 +118,94 @@ final class PadMacroStore: ObservableObject {
                 steps: [
                     PadMacroStepV2(action: "launchApp", keyCode: nil, modifiers: nil, text: "com.apple.Terminal", delayMs: nil)
                 ]
+            ),
+
+            // Preset 5: Open YouTube
+            PadMacroDefinition(
+                id: "preset.openYouTube",
+                name: "Buka YouTube",
+                description: "Buka YouTube langsung di Google Chrome / Browser Mac",
+                icon: "play.rectangle.fill",
+                steps: [
+                    PadMacroStepV2(action: "launchApp", keyCode: nil, modifiers: nil, text: "https://youtube.com", delayMs: nil)
+                ]
+            ),
+
+            // Preset 6: Open Google
+            PadMacroDefinition(
+                id: "preset.openGoogle",
+                name: "Buka Google",
+                description: "Buka Google Search di Browser Mac",
+                icon: "magnifyingglass",
+                steps: [
+                    PadMacroStepV2(action: "launchApp", keyCode: nil, modifiers: nil, text: "https://google.com", delayMs: nil)
+                ]
+            ),
+
+            // Preset 7: Open GitHub
+            PadMacroDefinition(
+                id: "preset.openGitHub",
+                name: "Buka GitHub",
+                description: "Buka GitHub di Browser Mac",
+                icon: "chevron.left.forwardslash.chevron.right",
+                steps: [
+                    PadMacroStepV2(action: "launchApp", keyCode: nil, modifiers: nil, text: "https://github.com", delayMs: nil)
+                ]
+            ),
+
+            // Preset 8: Open ChatGPT
+            PadMacroDefinition(
+                id: "preset.openChatGPT",
+                name: "Buka ChatGPT",
+                description: "Buka ChatGPT di Browser Mac",
+                icon: "sparkles",
+                steps: [
+                    PadMacroStepV2(action: "launchApp", keyCode: nil, modifiers: nil, text: "https://chatgpt.com", delayMs: nil)
+                ]
+            ),
+
+            // Preset 9: Open X (Twitter)
+            PadMacroDefinition(
+                id: "preset.openX",
+                name: "Buka X / Twitter",
+                description: "Buka x.com di Browser Mac",
+                icon: "bubble.left.and.bubble.right.fill",
+                steps: [
+                    PadMacroStepV2(action: "launchApp", keyCode: nil, modifiers: nil, text: "https://x.com", delayMs: nil)
+                ]
+            ),
+
+            // Preset 10: Open Netflix
+            PadMacroDefinition(
+                id: "preset.openNetflix",
+                name: "Buka Netflix",
+                description: "Buka Netflix di Browser Mac",
+                icon: "film.fill",
+                steps: [
+                    PadMacroStepV2(action: "launchApp", keyCode: nil, modifiers: nil, text: "https://netflix.com", delayMs: nil)
+                ]
+            ),
+
+            // Preset 11: Open Spotify Web
+            PadMacroDefinition(
+                id: "preset.openSpotify",
+                name: "Buka Spotify Web",
+                description: "Buka Spotify Web Player di Browser Mac",
+                icon: "waveform",
+                steps: [
+                    PadMacroStepV2(action: "launchApp", keyCode: nil, modifiers: nil, text: "https://open.spotify.com", delayMs: nil)
+                ]
+            ),
+
+            // Preset 12: Open Reddit
+            PadMacroDefinition(
+                id: "preset.openReddit",
+                name: "Buka Reddit",
+                description: "Buka Reddit di Browser Mac",
+                icon: "flame.fill",
+                steps: [
+                    PadMacroStepV2(action: "launchApp", keyCode: nil, modifiers: nil, text: "https://reddit.com", delayMs: nil)
+                ]
             )
         ]
     }

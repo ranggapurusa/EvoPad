@@ -46,15 +46,15 @@ struct PadMacroEditorSheet: View {
 
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
-                            ForEach(availableIcons, id: \.self) { ic in
+                            ForEach(availableIcons, id: \.self) { (ic: String) in
                                 Button {
                                     icon = ic
                                 } label: {
                                     Image(systemName: ic)
                                         .font(.system(size: 18))
                                         .frame(width: 38, height: 38)
-                                        .background(icon == ic ? Color.indigo : Color.white.opacity(0.1))
-                                        .foregroundStyle(icon == ic ? .white : .secondary)
+                                        .background(iconBackground(for: ic))
+                                        .foregroundStyle(iconForeground(for: ic))
                                         .clipShape(RoundedRectangle(cornerRadius: 8))
                                 }
                                 .buttonStyle(.plain)
@@ -277,5 +277,13 @@ struct PadMacroEditorSheet: View {
         case "Z": return PadVirtualKey.z.rawValue
         default: return PadVirtualKey.a.rawValue
         }
+    }
+
+    private func iconBackground(for ic: String) -> Color {
+        icon == ic ? Color(red: 37 / 255, green: 99 / 255, blue: 235 / 255) : Color.white.opacity(0.1)
+    }
+
+    private func iconForeground(for ic: String) -> Color {
+        icon == ic ? Color.white : Color.secondary
     }
 }

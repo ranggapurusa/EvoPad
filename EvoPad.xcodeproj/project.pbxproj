@@ -33,6 +33,10 @@
 		A00000000000000000000062 /* PadWorkspaceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000061 /* PadWorkspaceStore.swift */; };
 		A00000000000000000000064 /* PadControlItemEditorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000063 /* PadControlItemEditorSheet.swift */; };
 		A00000000000000000000066 /* PadWorkspaceManagerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000065 /* PadWorkspaceManagerSheet.swift */; };
+		A00000000000000000000068 /* EvoIslandView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000067 /* EvoIslandView.swift */; };
+		A00000000000000000000070 /* EvoTouchBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000069 /* EvoTouchBarView.swift */; };
+		A00000000000000000000072 /* PadPopularWebsites.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000071 /* PadPopularWebsites.swift */; };
+		A00000000000000000000074 /* PadPopularWebsitesSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000073 /* PadPopularWebsitesSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -62,6 +66,10 @@
 		A00000000000000000000061 /* PadWorkspaceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadWorkspaceStore.swift; sourceTree = "<group>"; };
 		A00000000000000000000063 /* PadControlItemEditorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadControlItemEditorSheet.swift; sourceTree = "<group>"; };
 		A00000000000000000000065 /* PadWorkspaceManagerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadWorkspaceManagerSheet.swift; sourceTree = "<group>"; };
+		A00000000000000000000067 /* EvoIslandView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EvoIslandView.swift; sourceTree = "<group>"; };
+		A00000000000000000000069 /* EvoTouchBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EvoTouchBarView.swift; sourceTree = "<group>"; };
+		A00000000000000000000071 /* PadPopularWebsites.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadPopularWebsites.swift; sourceTree = "<group>"; };
+		A00000000000000000000073 /* PadPopularWebsitesSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadPopularWebsitesSheet.swift; sourceTree = "<group>"; };
 		A00000000000000000000024 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -128,6 +136,10 @@
 				A00000000000000000000061 /* PadWorkspaceStore.swift */,
 				A00000000000000000000063 /* PadControlItemEditorSheet.swift */,
 				A00000000000000000000065 /* PadWorkspaceManagerSheet.swift */,
+				A00000000000000000000067 /* EvoIslandView.swift */,
+				A00000000000000000000069 /* EvoTouchBarView.swift */,
+				A00000000000000000000071 /* PadPopularWebsites.swift */,
+				A00000000000000000000073 /* PadPopularWebsitesSheet.swift */,
 				A0000000000000000000001F /* Info.plist */,
 			);
 			path = iOS;
@@ -259,6 +271,10 @@
 				A00000000000000000000062 /* PadWorkspaceStore.swift in Sources */,
 				A00000000000000000000064 /* PadControlItemEditorSheet.swift in Sources */,
 				A00000000000000000000066 /* PadWorkspaceManagerSheet.swift in Sources */,
+				A00000000000000000000068 /* EvoIslandView.swift in Sources */,
+				A00000000000000000000070 /* EvoTouchBarView.swift in Sources */,
+				A00000000000000000000072 /* PadPopularWebsites.swift in Sources */,
+				A00000000000000000000074 /* PadPopularWebsitesSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -19,6 +19,216 @@ struct TrackpadSurface: UIViewRepresentable {
     }
 }
 
+/// Precision mechanical camera lens focal ring / focus dial scrollbar.
+/// Features machined knurled tick marks (major/minor notches), center Leica-red witness mark,
+/// travelling focus index needle with center hairline, and engraved focal limits (∞/0.3m or W/T).
+final class CameraLensDialView: UIView {
+    enum Axis {
+        case vertical
+        case horizontal
+    }
+
+    let axis: Axis
+    private let notchesLayer = CAShapeLayer()
+    private let centerWitnessMark = UIView()
+    private let indexNeedle = UIView()
+    private let needleHairline = UIView()
+    private let startLabel = UILabel()
+    private let endLabel = UILabel()
+
+    var normalizedPosition: CGFloat = 0.5 {
+        didSet {
+            updateNeedlePosition()
+        }
+    }
+
+    var isActive: Bool = false {
+        didSet {
+            updateActiveState()
+        }
+    }
+
+    init(axis: Axis) {
+        self.axis = axis
+        super.init(frame: .zero)
+        setupDial()
+    }
+
+    required init?(coder: NSCoder) {
+        self.axis = .vertical
+        super.init(coder: coder)
+        setupDial()
+    }
+
+    private func setupDial() {
+        isUserInteractionEnabled = false
+        backgroundColor = UIColor(red: 0.11, green: 0.12, blue: 0.15, alpha: 0.85)
+        layer.cornerRadius = 9
+        layer.borderWidth = 1
+        layer.borderColor = UIColor.white.withAlphaComponent(0.16).cgColor
+        layer.masksToBounds = true
+
+        // Center witness mark (Precision Leica Red index line)
+        centerWitnessMark.backgroundColor = UIColor(red: 0.95, green: 0.28, blue: 0.22, alpha: 0.95)
+        centerWitnessMark.layer.cornerRadius = 0.75
+        addSubview(centerWitnessMark)
+
+        // Precision travelling needle / focus thumb
+        indexNeedle.backgroundColor = UIColor(red: 0.388, green: 0.400, blue: 0.945, alpha: 0.92)
+        indexNeedle.layer.cornerRadius = 2
+        indexNeedle.layer.borderWidth = 0.5
+        indexNeedle.layer.borderColor = UIColor.white.withAlphaComponent(0.35).cgColor
+
+        needleHairline.backgroundColor = UIColor.white.withAlphaComponent(0.85)
+        indexNeedle.addSubview(needleHairline)
+        addSubview(indexNeedle)
+
+        // Focal engravings: ∞ and 0.3m for vertical; W and T for horizontal
+        startLabel.font = .monospacedSystemFont(ofSize: 8, weight: .bold)
+        startLabel.textColor = UIColor.white.withAlphaComponent(0.50)
+        startLabel.textAlignment = .center
+        startLabel.text = (axis == .vertical) ? "∞" : "W"
+        addSubview(startLabel)
+
+        endLabel.font = .monospacedSystemFont(ofSize: 7.5, weight: .bold)
+        endLabel.textColor = UIColor.white.withAlphaComponent(0.50)
+        endLabel.textAlignment = .center
+        endLabel.text = (axis == .vertical) ? "0.3m" : "T"
+        addSubview(endLabel)
+
+        layer.insertSublayer(notchesLayer, at: 0)
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard bounds.width > 0, bounds.height > 0 else { return }
+
+        drawMechanicalNotches()
+
+        if axis == .vertical {
+            startLabel.frame = CGRect(x: 0, y: 2, width: bounds.width, height: 14)
+            endLabel.frame = CGRect(x: 0, y: bounds.height - 15, width: bounds.width, height: 14)
+            centerWitnessMark.frame = CGRect(
+                x: (bounds.width - 12) / 2,
+                y: (bounds.height - 1.5) / 2,
+                width: 12,
+                height: 1.5
+            )
+        } else {
+            startLabel.frame = CGRect(x: 3, y: (bounds.height - 14) / 2, width: 14, height: 14)
+            endLabel.frame = CGRect(x: bounds.width - 17, y: (bounds.height - 14) / 2, width: 14, height: 14)
+            centerWitnessMark.frame = CGRect(
+                x: (bounds.width - 1.5) / 2,
+                y: (bounds.height - 12) / 2,
+                width: 1.5,
+                height: 12
+            )
+        }
+
+        updateNeedlePosition()
+    }
+
+    private func drawMechanicalNotches() {
+        let path = UIBezierPath()
+        let notchSpacing: CGFloat = 6.0
+
+        if axis == .vertical {
+            let startY: CGFloat = 17.0
+            let endY: CGFloat = bounds.height - 17.0
+            guard endY > startY else { return }
+
+            var currentY = startY
+            var idx = 0
+            while currentY <= endY {
+                let isMajor = (idx % 4 == 0)
+                let notchWidth: CGFloat = isMajor ? 10.0 : 5.0
+                let startX = (bounds.width - notchWidth) / 2
+                path.move(to: CGPoint(x: startX, y: currentY))
+                path.addLine(to: CGPoint(x: startX + notchWidth, y: currentY))
+                currentY += notchSpacing
+                idx += 1
+            }
+        } else {
+            let startX: CGFloat = 19.0
+            let endX: CGFloat = bounds.width - 19.0
+            guard endX > startX else { return }
+
+            var currentX = startX
+            var idx = 0
+            while currentX <= endX {
+                let isMajor = (idx % 4 == 0)
+                let notchHeight: CGFloat = isMajor ? 10.0 : 5.0
+                let startY = (bounds.height - notchHeight) / 2
+                path.move(to: CGPoint(x: currentX, y: startY))
+                path.addLine(to: CGPoint(x: currentX, y: startY + notchHeight))
+                currentX += notchSpacing
+                idx += 1
+            }
+        }
+
+        notchesLayer.path = path.cgPath
+        notchesLayer.strokeColor = UIColor.white.withAlphaComponent(0.28).cgColor
+        notchesLayer.lineWidth = 1.0
+        notchesLayer.lineCap = .round
+    }
+
+    private func updateNeedlePosition() {
+        let clamped = min(max(normalizedPosition, 0), 1)
+
+        if axis == .vertical {
+            let startY: CGFloat = 17.0
+            let endY: CGFloat = bounds.height - 17.0
+            let travel = max(endY - startY, 1)
+            let needleHeight: CGFloat = 20.0
+            let needleWidth: CGFloat = bounds.width - 6.0
+            let currentY = startY + (travel - needleHeight) * clamped
+            indexNeedle.frame = CGRect(
+                x: 3.0,
+                y: currentY,
+                width: needleWidth,
+                height: needleHeight
+            )
+            needleHairline.frame = CGRect(x: 2, y: (needleHeight - 1) / 2, width: needleWidth - 4, height: 1)
+        } else {
+            let startX: CGFloat = 19.0
+            let endX: CGFloat = bounds.width - 19.0
+            let travel = max(endX - startX, 1)
+            let needleWidth: CGFloat = 20.0
+            let needleHeight: CGFloat = bounds.height - 6.0
+            let currentX = startX + (travel - needleWidth) * clamped
+            indexNeedle.frame = CGRect(
+                x: currentX,
+                y: 3.0,
+                width: needleWidth,
+                height: needleHeight
+            )
+            needleHairline.frame = CGRect(x: (needleWidth - 1) / 2, y: 2, width: 1, height: needleHeight - 4)
+        }
+    }
+
+    private func updateActiveState() {
+        UIView.animate(withDuration: isActive ? 0.12 : 0.35) {
+            if self.isActive {
+                self.backgroundColor = UIColor(red: 0.16, green: 0.17, blue: 0.20, alpha: 0.95)
+                self.layer.borderColor = UIColor(red: 0.388, green: 0.400, blue: 0.945, alpha: 0.70).cgColor
+                self.indexNeedle.backgroundColor = UIColor(red: 0.488, green: 0.500, blue: 1.0, alpha: 1.0)
+                self.centerWitnessMark.backgroundColor = UIColor(red: 1.0, green: 0.35, blue: 0.25, alpha: 1.0)
+                self.notchesLayer.strokeColor = UIColor.white.withAlphaComponent(0.55).cgColor
+                self.startLabel.textColor = UIColor.white.withAlphaComponent(0.90)
+                self.endLabel.textColor = UIColor.white.withAlphaComponent(0.90)
+            } else {
+                self.backgroundColor = UIColor(red: 0.11, green: 0.12, blue: 0.15, alpha: 0.85)
+                self.layer.borderColor = UIColor.white.withAlphaComponent(0.16).cgColor
+                self.indexNeedle.backgroundColor = UIColor(red: 0.388, green: 0.400, blue: 0.945, alpha: 0.92)
+                self.centerWitnessMark.backgroundColor = UIColor(red: 0.95, green: 0.28, blue: 0.22, alpha: 0.95)
+                self.notchesLayer.strokeColor = UIColor.white.withAlphaComponent(0.28).cgColor
+                self.startLabel.textColor = UIColor.white.withAlphaComponent(0.50)
+                self.endLabel.textColor = UIColor.white.withAlphaComponent(0.50)
+            }
+        }
+    }
+}
+
 /// Gesture mapping:
 /// - 1 finger: pointer, tap = left click, long-press + move = fallback drag.
 /// - 2 fingers: tap = right click, move = scroll.
@@ -72,6 +282,15 @@ final class TrackpadInputView: UIView {
 
     private var isDragging = false
     private var dragWorkItem: DispatchWorkItem?
+    private var threeFingerReleaseWorkItem: DispatchWorkItem?
+    private let threeFingerDragReleaseGracePeriod: TimeInterval = 0.40
+
+    // Camera Lens Dial Scrollbars (Mechanical focal ring aesthetic)
+    private let verticalLensDial = CameraLensDialView(axis: .vertical)
+    private let horizontalLensDial = CameraLensDialView(axis: .horizontal)
+    private var dialFadeWorkItem: DispatchWorkItem?
+    private var activeDialTracking: CameraLensDialView.Axis? = nil
+    private let scrollZoneThickness: CGFloat = 48
 
     // Frame-coalesced motion queue.
     private var pendingPointerDelta = CGPoint.zero
@@ -108,6 +327,8 @@ final class TrackpadInputView: UIView {
     deinit {
         displayLink?.invalidate()
         dragWorkItem?.cancel()
+        threeFingerReleaseWorkItem?.cancel()
+        dialFadeWorkItem?.cancel()
     }
 
     private func commonInit() {
@@ -118,6 +339,59 @@ final class TrackpadInputView: UIView {
         layer.cornerRadius = 22
         layer.borderWidth = 1
         layer.borderColor = UIColor.white.withAlphaComponent(0.10).cgColor
+
+        // Camera Lens Dial Scrollbars
+        addSubview(verticalLensDial)
+        addSubview(horizontalLensDial)
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+
+        let vWidth: CGFloat = 18
+        let vHeight: CGFloat = min(bounds.height * 0.65, 230)
+        let vMargin: CGFloat = 8
+        verticalLensDial.frame = CGRect(
+            x: vMargin,
+            y: (bounds.height - vHeight) / 2,
+            width: vWidth,
+            height: vHeight
+        )
+
+        let hHeight: CGFloat = 18
+        let hWidth: CGFloat = min(bounds.width * 0.48, 240)
+        let hMargin: CGFloat = 8
+        let hLeftOffset: CGFloat = vMargin + vWidth + 8
+        horizontalLensDial.frame = CGRect(
+            x: hLeftOffset,
+            y: hMargin,
+            width: hWidth,
+            height: hHeight
+        )
+    }
+
+    private func isPointInVerticalScrollZone(_ point: CGPoint) -> Bool {
+        point.x <= scrollZoneThickness
+    }
+
+    private func isPointInHorizontalScrollZone(_ point: CGPoint) -> Bool {
+        let hMaxX = horizontalLensDial.frame.maxX + 16
+        return point.y <= scrollZoneThickness && point.x > scrollZoneThickness && point.x <= hMaxX
+    }
+
+    private func updateDialNeedleFromTouch(_ touch: UITouch, axis: CameraLensDialView.Axis) {
+        let loc = touch.location(in: self)
+        if axis == .vertical {
+            let dialFrame = verticalLensDial.frame
+            let relY = loc.y - dialFrame.origin.y
+            let norm = dialFrame.height > 0 ? (relY / dialFrame.height) : 0.5
+            verticalLensDial.normalizedPosition = norm
+        } else {
+            let dialFrame = horizontalLensDial.frame
+            let relX = loc.x - dialFrame.origin.x
+            let norm = dialFrame.width > 0 ? (relX / dialFrame.width) : 0.5
+            horizontalLensDial.normalizedPosition = norm
+        }
     }
 
     override func didMoveToWindow() {
@@ -133,7 +407,14 @@ final class TrackpadInputView: UIView {
     }
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        let isNewGesture = activeTouches.isEmpty
+        // If 3-finger drag is in grace period (user repositioning fingers), restore drag
+        if isDragging, threeFingerReleaseWorkItem != nil {
+            threeFingerReleaseWorkItem?.cancel()
+            threeFingerReleaseWorkItem = nil
+            onStatus?("3-finger drag dilanjutkan")
+        }
+
+        let isNewGesture = activeTouches.isEmpty && !isDragging
         if isNewGesture {
             resetGestureState()
         }
@@ -143,11 +424,50 @@ final class TrackpadInputView: UIView {
         }
 
         maximumTouchCount = max(maximumTouchCount, activeTouches.count)
+
+        if activeTouches.count == 1, isNewGesture, let touch = touches.first {
+            let loc = touch.location(in: self)
+            if isPointInVerticalScrollZone(loc) {
+                gestureMode = .scrolling
+                activeDialTracking = .vertical
+                verticalLensDial.isActive = true
+                updateDialNeedleFromTouch(touch, axis: .vertical)
+                UISelectionFeedbackGenerator().selectionChanged()
+                onStatus?("Dial fokal vertikal aktif — geser untuk scroll vertikal")
+                return
+            } else if isPointInHorizontalScrollZone(loc) {
+                gestureMode = .scrolling
+                activeDialTracking = .horizontal
+                horizontalLensDial.isActive = true
+                updateDialNeedleFromTouch(touch, axis: .horizontal)
+                UISelectionFeedbackGenerator().selectionChanged()
+                onStatus?("Dial fokal horizontal aktif — geser untuk scroll horizontal")
+                return
+            }
+        }
+
         updateModeForTouchCount(isNewGesture: isNewGesture)
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard !activeTouches.isEmpty else { return }
+
+        if let activeAxis = activeDialTracking, let touch = touches.first {
+            let current = touch.location(in: self)
+            let previous = touch.previousLocation(in: self)
+            if activeAxis == .vertical {
+                let dy = current.y - previous.y
+                queueMotion(CGPoint(x: 0, y: dy * 2.2), kind: .scroll)
+                verticalLensDial.isActive = true
+                updateDialNeedleFromTouch(touch, axis: .vertical)
+            } else {
+                let dx = current.x - previous.x
+                queueMotion(CGPoint(x: dx * 2.2, y: 0), kind: .scroll)
+                horizontalLensDial.isActive = true
+                updateDialNeedleFromTouch(touch, axis: .horizontal)
+            }
+            return
+        }
 
         if case .fourFingerSwipe = gestureMode {
             updateFourFingerDeltas(touches, event: event)
@@ -178,25 +498,50 @@ final class TrackpadInputView: UIView {
             activeTouches.removeValue(forKey: ObjectIdentifier(touch))
         }
 
-        // A 3-finger drag releases as soon as one finger lifts. Flush its last
-        // coalesced motion before mouse-up so the final segment is not dropped.
+        if let axis = activeDialTracking {
+            activeDialTracking = nil
+            if axis == .vertical {
+                verticalLensDial.isActive = false
+            } else {
+                horizontalLensDial.isActive = false
+            }
+        }
+
+        // When finger count drops below 3 during drag, debounce mouse-up
+        // so user can lift and reposition fingers to continue a long drag.
         if activeTouches.count < 3 {
             switch gestureMode {
-            case .threeFingerDragPending, .threeFingerDragging:
+            case .threeFingerDragPending:
                 flushFrameMotion()
-                if isDragging {
-                    onCommand?(.buttonUp(.left))
-                    onStatus?("3-finger drag selesai — tombol mouse dilepas")
-                }
-                isDragging = false
                 gestureMode = .ignored
                 dragWorkItem?.cancel()
+            case .threeFingerDragging:
+                flushFrameMotion()
+                dragWorkItem?.cancel()
+                if isDragging && threeFingerReleaseWorkItem == nil {
+                    let releaseWork = DispatchWorkItem { [weak self] in
+                        guard let self else { return }
+                        self.flushFrameMotion()
+                        if self.isDragging {
+                            self.onCommand?(.buttonUp(.left))
+                            self.isDragging = false
+                            self.onStatus?("3-finger drag selesai — tombol mouse dilepas")
+                        }
+                        self.gestureMode = .ignored
+                        self.threeFingerReleaseWorkItem = nil
+                    }
+                    threeFingerReleaseWorkItem = releaseWork
+                    DispatchQueue.main.asyncAfter(
+                        deadline: .now() + threeFingerDragReleaseGracePeriod,
+                        execute: releaseWork
+                    )
+                }
             default:
                 break
             }
         }
 
-        if activeTouches.isEmpty {
+        if activeTouches.isEmpty && threeFingerReleaseWorkItem == nil {
             finishGesture(cancelled: false)
         }
     }
@@ -229,6 +574,14 @@ final class TrackpadInputView: UIView {
 
         for touch in touches {
             activeTouches.removeValue(forKey: ObjectIdentifier(touch))
+        }
+        if let axis = activeDialTracking {
+            activeDialTracking = nil
+            if axis == .vertical {
+                verticalLensDial.isActive = false
+            } else {
+                horizontalLensDial.isActive = false
+            }
         }
         finishGesture(cancelled: true)
     }
@@ -263,12 +616,17 @@ final class TrackpadInputView: UIView {
 
         if count == 3 {
             if case .fourFingerSwipe = gestureMode { return }
+            if isDragging {
+                // Drag already active from previous 3-finger session within grace period: continue dragging
+                threeFingerReleaseWorkItem?.cancel()
+                threeFingerReleaseWorkItem = nil
+                gestureMode = .threeFingerDragging
+                onStatus?("3-finger drag dilanjutkan")
+                return
+            }
             if case .threeFingerDragPending = gestureMode { return }
             if case .threeFingerDragging = gestureMode { return }
             flushFrameMotion()
-            if isDragging {
-                releaseDragIfNeeded(message: "Drag sebelumnya dilepas")
-            }
             gestureMode = .threeFingerDragPending
             threeFingerDragMovement = 0
             dragWorkItem?.cancel()
@@ -297,6 +655,8 @@ final class TrackpadInputView: UIView {
     }
 
     private func releaseDragIfNeeded(message: String) {
+        threeFingerReleaseWorkItem?.cancel()
+        threeFingerReleaseWorkItem = nil
         flushFrameMotion()
         if isDragging {
             onCommand?(.buttonUp(.left))
@@ -361,10 +721,12 @@ final class TrackpadInputView: UIView {
             if totalMovement >= scrollStartThreshold {
                 gestureMode = .scrolling
                 queueMotion(delta, kind: .scroll)
+                highlightDials(delta: delta)
             }
 
         case .scrolling:
             queueMotion(delta, kind: .scroll)
+            highlightDials(delta: delta)
 
         case .threeFingerDragPending:
             threeFingerDragMovement += hypot(delta.x, delta.y)
@@ -383,6 +745,26 @@ final class TrackpadInputView: UIView {
         case .fourFingerSwipe, .ignored:
             break
         }
+    }
+
+    private func highlightDials(delta: CGPoint) {
+        dialFadeWorkItem?.cancel()
+        if abs(delta.y) > 0.3 {
+            verticalLensDial.isActive = true
+            verticalLensDial.normalizedPosition = min(max(verticalLensDial.normalizedPosition + (delta.y * 0.008), 0), 1)
+        }
+        if abs(delta.x) > 0.3 {
+            horizontalLensDial.isActive = true
+            horizontalLensDial.normalizedPosition = min(max(horizontalLensDial.normalizedPosition + (delta.x * 0.008), 0), 1)
+        }
+
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.verticalLensDial.isActive = false
+            self.horizontalLensDial.isActive = false
+        }
+        dialFadeWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45, execute: work)
     }
 
     private func queueMotion(_ delta: CGPoint, kind: MotionKind) {
@@ -441,6 +823,8 @@ final class TrackpadInputView: UIView {
         flushFrameMotion()
         dragWorkItem?.cancel()
         dragWorkItem = nil
+        threeFingerReleaseWorkItem?.cancel()
+        threeFingerReleaseWorkItem = nil
 
         if isDragging {
             onCommand?(.buttonUp(.left))
@@ -487,8 +871,15 @@ final class TrackpadInputView: UIView {
         pendingScrollDelta = .zero
         gestureMode = .pointer
         isDragging = false
+        activeDialTracking = nil
+        verticalLensDial.isActive = false
+        horizontalLensDial.isActive = false
+        dialFadeWorkItem?.cancel()
+        dialFadeWorkItem = nil
         dragWorkItem?.cancel()
         dragWorkItem = nil
+        threeFingerReleaseWorkItem?.cancel()
+        threeFingerReleaseWorkItem = nil
         displayLink?.invalidate()
         displayLink = nil
     }

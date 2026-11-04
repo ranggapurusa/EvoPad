@@ -183,6 +183,24 @@ final class PadMacroExecutor {
 
         DispatchQueue.main.async {
             let ws = NSWorkspace.shared
+
+            // 0. If web URL (http:// or https://), open directly in Google Chrome if installed, else default browser
+            if let url = URL(string: namedOrBundleId), (url.scheme == "http" || url.scheme == "https") {
+                if let chromeUrl = ws.urlForApplication(withBundleIdentifier: "com.google.Chrome") {
+                    let config = NSWorkspace.OpenConfiguration()
+                    config.activates = true
+                    ws.open([url], withApplicationAt: chromeUrl, configuration: config) { _, error in
+                        launched = (error == nil)
+                        sema.signal()
+                    }
+                } else {
+                    ws.open(url)
+                    launched = true
+                    sema.signal()
+                }
+                return
+            }
+
             // 1. Try bundle ID lookup
             if let appUrl = ws.urlForApplication(withBundleIdentifier: namedOrBundleId) {
                 let config = NSWorkspace.OpenConfiguration()

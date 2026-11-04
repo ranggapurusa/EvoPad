@@ -24,7 +24,9 @@ enum PadProtocol {
             sec_protocol_options_set_local_identity(tls.securityProtocolOptions, identity)
         }
 
-        return NWParameters(tls: tls, tcp: tcp)
+        let params = NWParameters(tls: tls, tcp: tcp)
+        params.serviceClass = .responsiveData
+        return params
     }
 
     /// TLS 1.3 parameters for iPad Client with pinned certificate fingerprint verification.
@@ -52,7 +54,9 @@ enum PadProtocol {
             verifyQueue
         )
 
-        return NWParameters(tls: tls, tcp: tcp)
+        let params = NWParameters(tls: tls, tcp: tcp)
+        params.serviceClass = .responsiveData
+        return params
     }
 }
 
@@ -439,6 +443,12 @@ enum PadVirtualKey: UInt16, CaseIterable {
     case f1 = 122, f2 = 120, f3 = 99, f4 = 118, f5 = 96, f6 = 97
     case f7 = 98, f8 = 100, f9 = 101, f10 = 109, f11 = 103, f12 = 111
 
+    // Keypad (Numpad) - macOS Virtual Key Codes
+    case keypad0 = 82, keypad1 = 83, keypad2 = 84, keypad3 = 85, keypad4 = 86
+    case keypad5 = 87, keypad6 = 88, keypad7 = 89, keypad8 = 91, keypad9 = 92
+    case keypadDecimal = 65, keypadMultiply = 67, keypadPlus = 69, keypadClear = 71
+    case keypadDivide = 75, keypadEnter = 76, keypadMinus = 78, keypadEquals = 81
+
     // Modifiers (as standalone keys)
     case command = 55
     case shift = 56
@@ -645,6 +655,19 @@ struct PadEnvelopeV2: Codable, Equatable {
         )
     }
 
+    static func textInput(
+        _ text: String,
+        requestId: String = UUID().uuidString
+    ) -> PadEnvelopeV2 {
+        PadEnvelopeV2(
+            requestId: requestId,
+            type: .textInput,
+            payload: PadPayloadV2(
+                text: text
+            )
+        )
+    }
+
     /// Validates payload constraints for incoming V2 messages.
     func validatePayload() -> PadErrorPayloadV2? {
         guard !requestId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -782,6 +805,16 @@ enum PadFrameCodec {
 
     /// Thread-safe reusable JSON encoding for V1 `PadCommand` with trailing newline (`0x0A`).
     static func encodeV1Command(_ command: PadCommand) -> Data? {
+        // High-frequency fast path for pointer motion: avoid JSONEncoder overhead & lock contention
+        if command.type == .move, let dx = command.dx, let dy = command.dy {
+            let jsonString = "{\"type\":\"move\",\"dx\":\(dx),\"dy\":\(dy)}\n"
+            return Data(jsonString.utf8)
+        }
+        if command.type == .scroll, let dx = command.dx, let dy = command.dy {
+            let jsonString = "{\"type\":\"scroll\",\"dx\":\(dx),\"dy\":\(dy)}\n"
+            return Data(jsonString.utf8)
+        }
+
         codecLock.lock()
         defer { codecLock.unlock() }
         guard var data = try? sharedEncoder.encode(command) else { return nil }
@@ -834,6 +867,14 @@ enum PadFrameCodec {
             return .failure(.frameTooLarge(line.count))
         }
 
+        // Fast-path for high-frequency pointer & scroll motion without JSONDecoder allocation
+        if line.count < 128,
+           let str = String(data: line, encoding: .utf8),
+           (str.contains("\"move\"") || str.contains("\"scroll\"")),
+           let command = parseFastMotionCommand(from: str) {
+            return .success(.v1Command(command))
+        }
+
         let mightBeV2 = line.range(of: v2ShortVersionKey) != nil || line.range(of: v2LongVersionKey) != nil
 
         codecLock.lock()
@@ -866,6 +907,26 @@ enum PadFrameCodec {
         }
 
         return .failure(.malformedJSON)
+    }
+
+    static func parseFastMotionCommand(from str: String) -> PadCommand? {
+        let isMove = str.contains("\"move\"")
+        let isScroll = !isMove && str.contains("\"scroll\"")
+        guard isMove || isScroll else { return nil }
+
+        guard let dxRange = str.range(of: "\"dx\":"),
+              let dyRange = str.range(of: "\"dy\":") else { return nil }
+
+        let dxSub = str[dxRange.upperBound...]
+        let dySub = str[dyRange.upperBound...]
+
+        guard let dxEnd = dxSub.firstIndex(where: { $0 == "," || $0 == "}" || $0 == "\n" }),
+              let dyEnd = dySub.firstIndex(where: { $0 == "," || $0 == "}" || $0 == "\n" }) else { return nil }
+
+        guard let dx = Double(dxSub[..<dxEnd].trimmingCharacters(in: .whitespaces)),
+              let dy = Double(dySub[..<dyEnd].trimmingCharacters(in: .whitespaces)) else { return nil }
+
+        return PadCommand(type: isMove ? .move : .scroll, dx: dx, dy: dy, button: nil, gestureDirection: nil)
     }
 
     static func decodeServerFrame(_ line: Data) -> Result<PadDecodedServerResponse, PadProtocolDecodeError> {
