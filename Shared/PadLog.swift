@@ -8,6 +8,7 @@ enum PadLog {
     private static let gestureLogger = Logger(subsystem: "id.evonex.evopad", category: "gesture")
     private static let networkLogger = Logger(subsystem: "id.evonex.evopad", category: "network")
     private static let pointerLogger = Logger(subsystem: "id.evonex.evopad", category: "pointer")
+    private static let keyboardLogger = Logger(subsystem: "id.evonex.evopad", category: "keyboard")
 
     static func gesture(_ message: String) {
         gestureLogger.debug("\(message)")
@@ -19,6 +20,10 @@ enum PadLog {
 
     static func pointer(_ message: String) {
         pointerLogger.debug("\(message)")
+    }
+
+    static func keyboard(_ message: String) {
+        keyboardLogger.debug("\(message)")
     }
 }
 

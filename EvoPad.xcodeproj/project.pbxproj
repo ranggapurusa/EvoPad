@@ -19,6 +19,26 @@
 		A0000000000000000000002E /* MacContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000023 /* MacContentView.swift */; };
 		A0000000000000000000002F /* PadLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000030 /* PadLog.swift */; };
 		A00000000000000000000031 /* PadLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000030 /* PadLog.swift */; };
+		A00000000000000000000041 /* PadSecurityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000040 /* PadSecurityManager.swift */; };
+		A00000000000000000000042 /* PadSecurityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000040 /* PadSecurityManager.swift */; };
+		A00000000000000000000044 /* PadServerIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000043 /* PadServerIdentity.swift */; };
+		A00000000000000000000046 /* PadQRScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000045 /* PadQRScannerView.swift */; };
+		A00000000000000000000048 /* PadKeyboardController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000047 /* PadKeyboardController.swift */; };
+		A00000000000000000000050 /* PadVirtualKeyboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000049 /* PadVirtualKeyboardView.swift */; };
+		A00000000000000000000052 /* PadMacroStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000051 /* PadMacroStore.swift */; };
+		A00000000000000000000054 /* PadMacroExecutor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000053 /* PadMacroExecutor.swift */; };
+		A00000000000000000000056 /* PadMacroEditorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000055 /* PadMacroEditorSheet.swift */; };
+		A00000000000000000000058 /* PadControlPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000057 /* PadControlPanelView.swift */; };
+		A00000000000000000000060 /* PadWorkspaceModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000059 /* PadWorkspaceModels.swift */; };
+		A00000000000000000000062 /* PadWorkspaceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000061 /* PadWorkspaceStore.swift */; };
+		A00000000000000000000064 /* PadControlItemEditorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000063 /* PadControlItemEditorSheet.swift */; };
+		A00000000000000000000066 /* PadWorkspaceManagerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000065 /* PadWorkspaceManagerSheet.swift */; };
+		A00000000000000000000068 /* EvoIslandView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000067 /* EvoIslandView.swift */; };
+		A00000000000000000000070 /* EvoTouchBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000069 /* EvoTouchBarView.swift */; };
+		A00000000000000000000072 /* PadPopularWebsites.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000071 /* PadPopularWebsites.swift */; };
+		A00000000000000000000074 /* PadPopularWebsitesSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000073 /* PadPopularWebsitesSheet.swift */; };
+		A00000000000000000000075 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000076 /* Assets.xcassets */; };
+		A00000000000000000000077 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000078 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -26,16 +46,35 @@
 		A00000000000000000000008 /* EvoPad Mac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "EvoPad Mac.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A0000000000000000000001A /* PadCommand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadCommand.swift; sourceTree = "<group>"; };
 		A00000000000000000000030 /* PadLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadLog.swift; sourceTree = "<group>"; };
+		A00000000000000000000040 /* PadSecurityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadSecurityManager.swift; sourceTree = "<group>"; };
 		A0000000000000000000001B /* EvoPadApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EvoPadApp.swift; sourceTree = "<group>"; };
 		A0000000000000000000001C /* PadConnectionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadConnectionManager.swift; sourceTree = "<group>"; };
 		A0000000000000000000001D /* TrackpadSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackpadSurface.swift; sourceTree = "<group>"; };
 		A0000000000000000000001E /* PadContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadContentView.swift; sourceTree = "<group>"; };
+		A00000000000000000000045 /* PadQRScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadQRScannerView.swift; sourceTree = "<group>"; };
 		A0000000000000000000001F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A00000000000000000000020 /* EvoPadMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EvoPadMacApp.swift; sourceTree = "<group>"; };
 		A00000000000000000000021 /* MacServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacServer.swift; sourceTree = "<group>"; };
 		A00000000000000000000022 /* InputEventController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputEventController.swift; sourceTree = "<group>"; };
 		A00000000000000000000023 /* MacContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacContentView.swift; sourceTree = "<group>"; };
+		A00000000000000000000043 /* PadServerIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadServerIdentity.swift; sourceTree = "<group>"; };
+		A00000000000000000000047 /* PadKeyboardController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadKeyboardController.swift; sourceTree = "<group>"; };
+		A00000000000000000000049 /* PadVirtualKeyboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadVirtualKeyboardView.swift; sourceTree = "<group>"; };
+		A00000000000000000000051 /* PadMacroStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadMacroStore.swift; sourceTree = "<group>"; };
+		A00000000000000000000053 /* PadMacroExecutor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadMacroExecutor.swift; sourceTree = "<group>"; };
+		A00000000000000000000055 /* PadMacroEditorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadMacroEditorSheet.swift; sourceTree = "<group>"; };
+		A00000000000000000000057 /* PadControlPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadControlPanelView.swift; sourceTree = "<group>"; };
+		A00000000000000000000059 /* PadWorkspaceModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadWorkspaceModels.swift; sourceTree = "<group>"; };
+		A00000000000000000000061 /* PadWorkspaceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadWorkspaceStore.swift; sourceTree = "<group>"; };
+		A00000000000000000000063 /* PadControlItemEditorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadControlItemEditorSheet.swift; sourceTree = "<group>"; };
+		A00000000000000000000065 /* PadWorkspaceManagerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadWorkspaceManagerSheet.swift; sourceTree = "<group>"; };
+		A00000000000000000000067 /* EvoIslandView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EvoIslandView.swift; sourceTree = "<group>"; };
+		A00000000000000000000069 /* EvoTouchBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EvoTouchBarView.swift; sourceTree = "<group>"; };
+		A00000000000000000000071 /* PadPopularWebsites.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadPopularWebsites.swift; sourceTree = "<group>"; };
+		A00000000000000000000073 /* PadPopularWebsitesSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadPopularWebsitesSheet.swift; sourceTree = "<group>"; };
 		A00000000000000000000024 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A00000000000000000000076 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A00000000000000000000078 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -80,6 +119,7 @@
 			children = (
 				A0000000000000000000001A /* PadCommand.swift */,
 				A00000000000000000000030 /* PadLog.swift */,
+				A00000000000000000000040 /* PadSecurityManager.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -91,6 +131,20 @@
 				A0000000000000000000001C /* PadConnectionManager.swift */,
 				A0000000000000000000001D /* TrackpadSurface.swift */,
 				A0000000000000000000001E /* PadContentView.swift */,
+				A00000000000000000000045 /* PadQRScannerView.swift */,
+				A00000000000000000000049 /* PadVirtualKeyboardView.swift */,
+				A00000000000000000000051 /* PadMacroStore.swift */,
+				A00000000000000000000055 /* PadMacroEditorSheet.swift */,
+				A00000000000000000000057 /* PadControlPanelView.swift */,
+				A00000000000000000000059 /* PadWorkspaceModels.swift */,
+				A00000000000000000000061 /* PadWorkspaceStore.swift */,
+				A00000000000000000000063 /* PadControlItemEditorSheet.swift */,
+				A00000000000000000000065 /* PadWorkspaceManagerSheet.swift */,
+				A00000000000000000000067 /* EvoIslandView.swift */,
+				A00000000000000000000069 /* EvoTouchBarView.swift */,
+				A00000000000000000000071 /* PadPopularWebsites.swift */,
+				A00000000000000000000073 /* PadPopularWebsitesSheet.swift */,
+				A00000000000000000000076 /* Assets.xcassets */,
 				A0000000000000000000001F /* Info.plist */,
 			);
 			path = iOS;
@@ -103,6 +157,10 @@
 				A00000000000000000000021 /* MacServer.swift */,
 				A00000000000000000000022 /* InputEventController.swift */,
 				A00000000000000000000023 /* MacContentView.swift */,
+				A00000000000000000000043 /* PadServerIdentity.swift */,
+				A00000000000000000000047 /* PadKeyboardController.swift */,
+				A00000000000000000000053 /* PadMacroExecutor.swift */,
+				A00000000000000000000078 /* Assets.xcassets */,
 				A00000000000000000000024 /* Info.plist */,
 			);
 			path = macOS;
@@ -186,6 +244,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A00000000000000000000075 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -193,6 +252,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A00000000000000000000077 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -205,10 +265,24 @@
 			files = (
 				A00000000000000000000025 /* PadCommand.swift in Sources */,
 				A0000000000000000000002F /* PadLog.swift in Sources */,
+				A00000000000000000000041 /* PadSecurityManager.swift in Sources */,
 				A00000000000000000000026 /* EvoPadApp.swift in Sources */,
 				A00000000000000000000027 /* PadConnectionManager.swift in Sources */,
 				A00000000000000000000028 /* TrackpadSurface.swift in Sources */,
 				A00000000000000000000029 /* PadContentView.swift in Sources */,
+				A00000000000000000000046 /* PadQRScannerView.swift in Sources */,
+				A00000000000000000000050 /* PadVirtualKeyboardView.swift in Sources */,
+				A00000000000000000000052 /* PadMacroStore.swift in Sources */,
+				A00000000000000000000056 /* PadMacroEditorSheet.swift in Sources */,
+				A00000000000000000000058 /* PadControlPanelView.swift in Sources */,
+				A00000000000000000000060 /* PadWorkspaceModels.swift in Sources */,
+				A00000000000000000000062 /* PadWorkspaceStore.swift in Sources */,
+				A00000000000000000000064 /* PadControlItemEditorSheet.swift in Sources */,
+				A00000000000000000000066 /* PadWorkspaceManagerSheet.swift in Sources */,
+				A00000000000000000000068 /* EvoIslandView.swift in Sources */,
+				A00000000000000000000070 /* EvoTouchBarView.swift in Sources */,
+				A00000000000000000000072 /* PadPopularWebsites.swift in Sources */,
+				A00000000000000000000074 /* PadPopularWebsitesSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -218,10 +292,14 @@
 			files = (
 				A0000000000000000000002A /* PadCommand.swift in Sources */,
 				A00000000000000000000031 /* PadLog.swift in Sources */,
+				A00000000000000000000042 /* PadSecurityManager.swift in Sources */,
 				A0000000000000000000002B /* EvoPadMacApp.swift in Sources */,
 				A0000000000000000000002C /* MacServer.swift in Sources */,
 				A0000000000000000000002D /* InputEventController.swift in Sources */,
 				A0000000000000000000002E /* MacContentView.swift in Sources */,
+				A00000000000000000000044 /* PadServerIdentity.swift in Sources */,
+				A00000000000000000000048 /* PadKeyboardController.swift in Sources */,
+				A00000000000000000000054 /* PadMacroExecutor.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -319,6 +397,7 @@
 		A00000000000000000000013 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = TD888D2NXP;
@@ -339,6 +418,7 @@
 		A00000000000000000000014 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = TD888D2NXP;
@@ -358,6 +438,7 @@
 		A00000000000000000000015 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
@@ -379,6 +460,7 @@
 		A00000000000000000000016 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
